@@ -32,7 +32,7 @@
 
 //  }
 
-const Post = require("../bot/Post.model")
+const Post = require("../bot/Post")
 const fs   = require("fs")
 const path = require("path")
 const matter = require("gray-matter")

@@ -186,7 +186,7 @@
 
 const TelegramBot = require("node-telegram-bot-api")
 const cloudinary  = require("../cloudinary.config")
-const Post        = require("../blog/Post.model")
+const Post        = require("../bot/Post")
 const axios       = require("axios")
 
 // ── helpers ───────────────────────────────────────────────────────────────
