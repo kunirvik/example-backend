@@ -413,11 +413,11 @@ async function handleMsg(bot, msg) {
   const text = msg.text || msg.caption || ""
   const title = getTitle(text) || "Без заголовка"
   // const id = slugify(title)
-const id = `${slugify(title)}-${date}-${msg.message_id}`
+
   // Дата: берём из оригинального поста если есть, иначе сегодня
   const originalDate = msg.forward_date || msg.date
   const date = new Date(originalDate * 1000).toISOString().slice(0, 10)
-
+const id = `${slugify(title)}-${date}-${msg.message_id}`
   const base = {
     id, title, type: "company", date,
     tags: extractTags(text),
