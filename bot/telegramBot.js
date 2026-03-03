@@ -412,8 +412,8 @@ async function savePost(data) {
 async function handleMsg(bot, msg) {
   const text = msg.text || msg.caption || ""
   const title = getTitle(text) || "Без заголовка"
-  const id = slugify(title)
-
+  // const id = slugify(title)
+const id = `${slugify(title)}-${date}-${msg.message_id}`
   // Дата: берём из оригинального поста если есть, иначе сегодня
   const originalDate = msg.forward_date || msg.date
   const date = new Date(originalDate * 1000).toISOString().slice(0, 10)
@@ -472,7 +472,8 @@ async function processAlbum(bot, group) {
     const { photos, caption, date: rawDate } = group
     const text  = caption || ""
     const title = getTitle(text) || "Без заголовка"
-    const id    = slugify(title)
+    // const id    = slugify(title)
+    const id = `${slugify(title)}-${date}`
     const date  = new Date(rawDate * 1000).toISOString().slice(0, 10)
 
     const fileIds = photos.map(ph => ph[ph.length - 1].file_id)
