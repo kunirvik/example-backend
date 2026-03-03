@@ -185,9 +185,8 @@
 // module.exports = { createBot }
 
 const TelegramBot = require("node-telegram-bot-api")
-const cloudinary  = require("../cloudinary.config")
+const cloudinary  = require("..//cloudinary.config")
 const Post        = require("../bot/Post")
-const axios       = require("axios")
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -221,23 +220,13 @@ function getBody(text = "") {
 
 // ── Cloudinary upload ─────────────────────────────────────────────────────
 
-/**
- * Downloads a Telegram file URL and uploads it to Cloudinary.
- * Returns the secure Cloudinary URL.
- */
+// Cloudinary скачивает файл сам по URL — Buffer и axios не нужны
 async function uploadToCloudinary(fileUrl, folder = "blog", resourceType = "image") {
-  const response = await axios.get(fileUrl, { responseType: "arraybuffer" })
-  const buffer   = Buffer.from(response.data)
-  const b64      = buffer.toString("base64")
-  const dataUri  = `data:${response.headers["content-type"]};base64,${b64}`
-
-  const result = await cloudinary.uploader.upload(dataUri, {
+  const result = await cloudinary.uploader.upload(fileUrl, {
     folder,
     resource_type: resourceType,
-    // Auto-generate a public_id based on timestamp
     public_id: `tg_${Date.now()}`,
   })
-
   return result.secure_url
 }
 
@@ -249,14 +238,13 @@ async function getCloudinaryUrl(bot, fileId, isVideo = false) {
 // ── Save to MongoDB ───────────────────────────────────────────────────────
 
 async function savePost(data) {
-  // Upsert so re-posting the same slug doesn't duplicate
   await Post.findOneAndUpdate({ id: data.id }, data, { upsert: true, new: true })
   console.log(`✅ Saved to MongoDB: ${data.id}`)
 }
 
 // ── Media group batching ──────────────────────────────────────────────────
 
-const mediaGroups = {} // { [groupId]: { timer, photos[], caption } }
+const mediaGroups = {}
 
 function handleMediaGroup(bot, msg) {
   const groupId = msg.media_group_id
@@ -283,10 +271,8 @@ async function processAlbum(bot, group) {
     const url   = detectVideoUrl(text)
     const body  = getBody(text)
 
-    // Upload all photos to Cloudinary in parallel
-    const fileIds  = photos.map(ph => ph[ph.length - 1].file_id)
-    const cdnUrls  = await Promise.all(fileIds.map(fid => getCloudinaryUrl(bot, fid)))
-
+    const fileIds = photos.map(ph => ph[ph.length - 1].file_id)
+    const cdnUrls = await Promise.all(fileIds.map(fid => getCloudinaryUrl(bot, fid)))
     const [cover, ...restPhotos] = cdnUrls
 
     await savePost({
@@ -302,50 +288,40 @@ async function processAlbum(bot, group) {
 
 // ── Bot factory ───────────────────────────────────────────────────────────
 
-/**
- * Webhook mode: Express calls bot.processUpdate(req.body).
- * Set TELEGRAM_WEBHOOK_URL in .env to your public HTTPS URL.
- */
 function createBot(app) {
   const token      = process.env.TELEGRAM_BOT_TOKEN
   const channelId  = process.env.TELEGRAM_CHANNEL_ID
-  const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL // e.g. https://yourdomain.com
+  const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL
 
   if (!token) {
     console.warn("⚠️  TELEGRAM_BOT_TOKEN not set, bot disabled")
     return null
   }
 
-  const bot = new TelegramBot(token) // no polling — webhook mode
+  const bot = new TelegramBot(token)
 
-  // Register webhook with Telegram
   bot.setWebHook(`${webhookUrl}/bot${token}`)
     .then(() => console.log(`🔗 Webhook set: ${webhookUrl}/bot${token}`))
     .catch(e  => console.error("❌ Webhook error:", e.message))
 
-  // Express receives Telegram updates at this route
   app.post(`/bot${token}`, (req, res) => {
     bot.processUpdate(req.body)
     res.sendStatus(200)
   })
 
-  // ── Message handler ──────────────────────────────────────────────────
   bot.on("channel_post", async (msg) => {
     if (channelId && String(msg.chat.id) !== String(channelId)) return
 
     const text = msg.text || msg.caption || ""
 
-    // Album (multiple photos)
     if (msg.media_group_id) return handleMediaGroup(bot, msg)
 
-    // Single photo
     if (msg.photo) {
       try {
         const title    = getTitle(text) || "Без заголовка"
-        const id       = slugify(title)
         const coverUrl = await getCloudinaryUrl(bot, msg.photo[msg.photo.length - 1].file_id)
         await savePost({
-          id, title, type: "company",
+          id: slugify(title), title, type: "company",
           date: new Date().toISOString().slice(0, 10),
           tags: extractTags(text), cover: coverUrl,
           url: detectVideoUrl(text), content: getBody(text),
@@ -355,14 +331,12 @@ function createBot(app) {
       return
     }
 
-    // Video (mp4)
     if (msg.video) {
       try {
         const title    = getTitle(text) || "Без заголовка"
-        const id       = slugify(title)
         const videoUrl = await getCloudinaryUrl(bot, msg.video.file_id, true)
         await savePost({
-          id, title, type: "company",
+          id: slugify(title), title, type: "company",
           date: new Date().toISOString().slice(0, 10),
           tags: extractTags(text), video: videoUrl, content: getBody(text),
           excerpt: title.slice(0, 120), source: "telegram",
@@ -371,7 +345,6 @@ function createBot(app) {
       return
     }
 
-    // Text only (may contain YouTube/Rumble link)
     if (text) {
       const title = getTitle(text) || "Без заголовка"
       await savePost({
