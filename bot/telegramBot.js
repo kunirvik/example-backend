@@ -300,11 +300,13 @@ function createBot(app) {
 
   const bot = new TelegramBot(token)
 
-  bot.setWebHook(`${webhookUrl}/bot${token}`)
+  // bot.setWebHook(`${webhookUrl}/bot${token}`)
+  bot.setWebHook(`${webhookUrl}/webhook`)
     .then(() => console.log(`🔗 Webhook set: ${webhookUrl}/bot${token}`))
     .catch(e  => console.error("❌ Webhook error:", e.message))
 
-  app.post(`/bot${token}`, (req, res) => {
+  // app.post(`/bot${token}`, (req, res) => {
+    app.post(`/webhook`, (req, res) => {
     bot.processUpdate(req.body)
     res.sendStatus(200)
   })
