@@ -185,7 +185,7 @@
 // module.exports = { createBot }
 
 const TelegramBot = require("node-telegram-bot-api")
-const cloudinary  = require("..//cloudinary.config")
+const cloudinary  = require("../cloudinary.config")
 const Post        = require("../bot/Post")
 
 // ── helpers ───────────────────────────────────────────────────────────────
