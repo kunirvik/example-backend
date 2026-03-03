@@ -310,6 +310,7 @@ function createBot(app) {
   })
 
   bot.on("channel_post", async (msg) => {
+      console.log("📨 channel_post from:", msg.chat.id, msg.chat.title)
     if (channelId && String(msg.chat.id) !== String(channelId)) return
 
     const text = msg.text || msg.caption || ""
