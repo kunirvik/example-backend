@@ -307,6 +307,7 @@ function createBot(app) {
 
   // app.post(`/bot${token}`, (req, res) => {
     app.post(`/webhook`, (req, res) => {
+       console.log("📥 Webhook received:", JSON.stringify(req.body))
     bot.processUpdate(req.body)
     res.sendStatus(200)
   })
