@@ -409,16 +409,54 @@ async function savePost(data) {
 
 // ── Общий обработчик сообщения (и channel_post и пересланные) ─────────────
 
+// async function handleMsg(bot, msg) {
+//   const text = msg.text || msg.caption || ""
+//   const title = getTitle(text) || "Без заголовка"
+//   // const id = slugify(title)
+
+//   // Дата: берём из оригинального поста если есть, иначе сегодня
+//   const originalDate = msg.forward_date || msg.date
+//   const date = new Date(originalDate * 1000).toISOString().slice(0, 10)
+// // const id = `${slugify(title)}-${date}-${msg.message_id}`
+// const id = `${slugify(title)}-${msg.forward_from_message_id || msg.message_id}`
+//   const base = {
+//     id, title, type: "company", date,
+//     tags: extractTags(text),
+//     url: detectVideoUrl(text),
+//     content: getBody(text),
+//     excerpt: title.slice(0, 120),
+//     source: "telegram",
+//   }
+
+//   if (msg.photo) {
+//     try {
+//       const coverUrl = await getCloudinaryUrl(bot, msg.photo[msg.photo.length - 1].file_id)
+//       await savePost({ ...base, cover: coverUrl })
+//     } catch (e) { console.error("❌ Photo error:", e.message) }
+//     return
+//   }
+
+//   if (msg.video) {
+//     try {
+//       const videoUrl = await getCloudinaryUrl(bot, msg.video.file_id, true)
+//       await savePost({ ...base, video: videoUrl })
+//     } catch (e) { console.error("❌ Video error:", e.message) }
+//     return
+//   }
+
+//   if (text) {
+//     await savePost(base)
+//   }
+// }
+
 async function handleMsg(bot, msg) {
   const text = msg.text || msg.caption || ""
   const title = getTitle(text) || "Без заголовка"
-  // const id = slugify(title)
-
-  // Дата: берём из оригинального поста если есть, иначе сегодня
   const originalDate = msg.forward_date || msg.date
   const date = new Date(originalDate * 1000).toISOString().slice(0, 10)
-// const id = `${slugify(title)}-${date}-${msg.message_id}`
-const id = `${slugify(title)}-${msg.forward_from_message_id || msg.message_id}`
+  const originId = msg.forward_from_message_id || msg.message_id
+  const id = `${slugify(title)}-${originId}`
+
   const base = {
     id, title, type: "company", date,
     tags: extractTags(text),
@@ -444,19 +482,23 @@ const id = `${slugify(title)}-${msg.forward_from_message_id || msg.message_id}`
     return
   }
 
-  if (text) {
-    await savePost(base)
-  }
+  if (text) await savePost(base)
 }
+
 
 // ── Media group batching ──────────────────────────────────────────────────
 
 const mediaGroups = {}
-
 function handleMediaGroup(bot, msg) {
   const groupId = msg.media_group_id
   if (!mediaGroups[groupId]) {
-    mediaGroups[groupId] = { photos: [], caption: msg.caption || "", date: msg.forward_date || msg.date }
+    mediaGroups[groupId] = { 
+      photos: [], 
+      caption: msg.caption || "", 
+      date: msg.forward_date || msg.date,
+      // ID альбома берём из media_group_id — он одинаковый для всех фото
+      groupId: groupId
+    }
   }
   const group = mediaGroups[groupId]
   if (msg.photo) group.photos.push(msg.photo)
@@ -467,15 +509,53 @@ function handleMediaGroup(bot, msg) {
     delete mediaGroups[groupId]
   }, 1500)
 }
+// function handleMediaGroup(bot, msg) {
+//   const groupId = msg.media_group_id
+//   if (!mediaGroups[groupId]) {
+//     mediaGroups[groupId] = { photos: [], caption: msg.caption || "", date: msg.forward_date || msg.date }
+//   }
+//   const group = mediaGroups[groupId]
+//   if (msg.photo) group.photos.push(msg.photo)
+
+//   clearTimeout(group.timer)
+//   group.timer = setTimeout(async () => {
+//     await processAlbum(bot, group)
+//     delete mediaGroups[groupId]
+//   }, 1500)
+// }
+
+// async function processAlbum(bot, group) {
+//   try {
+//     const { photos, caption, date: rawDate } = group
+//     const text  = caption || ""
+//     const title = getTitle(text) || "Без заголовка"
+//     // const id    = slugify(title)
+//     const id = `${slugify(title)}-${date}`
+//     const date  = new Date(rawDate * 1000).toISOString().slice(0, 10)
+
+//     const fileIds = photos.map(ph => ph[ph.length - 1].file_id)
+//     const cdnUrls = await Promise.all(fileIds.map(fid => getCloudinaryUrl(bot, fid)))
+//     const [cover, ...restPhotos] = cdnUrls
+
+//     await savePost({
+//       id, title, type: "company", date,
+//       tags: extractTags(text), cover, photos: restPhotos,
+//       url: detectVideoUrl(text), content: getBody(text),
+//       excerpt: title.slice(0, 120), source: "telegram",
+//     })
+//   } catch (e) {
+//     console.error("❌ Album error:", e.message)
+//   }
+// }
 
 async function processAlbum(bot, group) {
   try {
-    const { photos, caption, date: rawDate } = group
+    const { photos, caption, date: rawDate, groupId } = group
     const text  = caption || ""
     const title = getTitle(text) || "Без заголовка"
-    // const id    = slugify(title)
-    const id = `${slugify(title)}-${date}`
     const date  = new Date(rawDate * 1000).toISOString().slice(0, 10)
+    // используем groupId для уникальности альбома
+    const id    = `${slugify(title)}-${groupId}`
 
     const fileIds = photos.map(ph => ph[ph.length - 1].file_id)
     const cdnUrls = await Promise.all(fileIds.map(fid => getCloudinaryUrl(bot, fid)))
