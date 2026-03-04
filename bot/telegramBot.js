@@ -623,7 +623,7 @@
 const TelegramBot = require("node-telegram-bot-api")
 const cloudinary  = require("../cloudinary.config")
 const Post        = require("../bot/Post")
-
+const { registerDeleteCommand } = require("../deletePost") 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function slugify(str = "") {
@@ -654,15 +654,6 @@ function getBody(text = "") {
   return text.split("\n").slice(1).join("\n").trim()
 }
 
-// ── Уникальный ID поста ────────────────────────────────────────────────────
-//
-// Формат: tg-{chatId}-{messageId}
-// • channel_post          → chatId = канал,    messageId = msg.message_id
-// • forwarded в личку     → chatId = оригинал, messageId = forward_from_message_id
-// • альбом                → tg-album-{media_group_id}
-//
-// Таким образом один и тот же пост канала ВСЕГДА получит один и тот же ID,
-// независимо от того, пришёл ли он как channel_post или был переслан боту.
 
 function makePostId(msg) {
   const originMsgId  = msg.forward_from_message_id || msg.message_id
@@ -674,22 +665,18 @@ function makeAlbumId(mediaGroupId) {
   return `tg-album-${mediaGroupId}`
 }
 
-// ── Cloudinary — дедупликация по file_unique_id ───────────────────────────
-//
-// Telegram присваивает каждому файлу стабильный file_unique_id.
-// Используем его как public_id в Cloudinary → повторная отправка
-// того же файла вернёт уже существующий URL, а не создаст новый.
+
 
 async function uploadToCloudinary(fileUrl, fileUniqueId, folder = "blog", resourceType = "image") {
   const publicId = `${folder}/${fileUniqueId}`
 
-  // Сначала проверяем — вдруг файл уже есть
+
   try {
     const existing = await cloudinary.api.resource(publicId, { resource_type: resourceType })
     console.log(`☁️  Cloudinary: already exists — ${publicId}`)
     return existing.secure_url
   } catch (_) {
-    // 404 — файла нет, загружаем
+    
   }
 
   const result = await cloudinary.uploader.upload(fileUrl, {
@@ -709,11 +696,7 @@ async function getCloudinaryUrl(bot, photo, isVideo = false) {
   return uploadToCloudinary(fileLink, fileUniqueId, "blog", isVideo ? "video" : "image")
 }
 
-// ── MongoDB — upsert по id ─────────────────────────────────────────────────
-//
-// findOneAndUpdate + upsert гарантирует идемпотентность:
-// повторный вызов с тем же id просто обновит документ, не создаст новый.
-// unique-индекс на поле id в схеме Post добавляет защиту на уровне БД.
+
 
 async function savePost(data) {
   const doc = await Post.findOneAndUpdate(
@@ -766,11 +749,7 @@ async function handleMsg(bot, msg) {
   if (text) await savePost(base)
 }
 
-// ── Обработка альбомов (media_group) ──────────────────────────────────────
-//
-// Telegram шлёт фото одного альбома несколькими апдейтами с одним
-// media_group_id. Собираем их за 1.5 сек, потом обрабатываем разом.
-// ID альбома = tg-album-{media_group_id} — всегда одинаковый.
+
 
 const mediaGroups = {}
 
@@ -864,6 +843,7 @@ function createBot(app) {
   })
 
   console.log("🤖 Telegram bot (webhook) started")
+  registerDeleteCommand(bot)
   return bot
 }
 
