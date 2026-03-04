@@ -368,57 +368,95 @@
 // module.exports = { createBot }
 
 
-const TelegramBot = require("node-telegram-bot-api")
-const cloudinary  = require("../cloudinary.config")
-const Post        = require("../bot/Post")
+// const TelegramBot = require("node-telegram-bot-api")
+// const cloudinary  = require("../cloudinary.config")
+// const Post        = require("../bot/Post")
 
-function slugify(str = "") {
-  return str.toLowerCase().replace(/[^a-zа-яё0-9\s]/gi, "").trim().replace(/\s+/g, "-").slice(0, 50) || `post-${Date.now()}`
-}
-function detectVideoUrl(text = "") {
-  const match = text.match(/(https?:\/\/(?:youtu\.be\/|(?:www\.)?youtube\.com\/watch\?v=|rumble\.com\/)[^\s]+)/)
-  return match ? match[1] : null
-}
-function extractTags(text = "") {
-  return [...text.matchAll(/#(\w+)/g)].map(m => m[1])
-}
-function getTitle(text = "") {
-  return text.split("\n")[0].replace(/#\w+/g, "").trim().slice(0, 100)
-}
-function getBody(text = "") {
-  return text.split("\n").slice(1).join("\n").trim()
-}
+// function slugify(str = "") {
+//   return str.toLowerCase().replace(/[^a-zа-яё0-9\s]/gi, "").trim().replace(/\s+/g, "-").slice(0, 50) || `post-${Date.now()}`
+// }
+// function detectVideoUrl(text = "") {
+//   const match = text.match(/(https?:\/\/(?:youtu\.be\/|(?:www\.)?youtube\.com\/watch\?v=|rumble\.com\/)[^\s]+)/)
+//   return match ? match[1] : null
+// }
+// function extractTags(text = "") {
+//   return [...text.matchAll(/#(\w+)/g)].map(m => m[1])
+// }
+// function getTitle(text = "") {
+//   return text.split("\n")[0].replace(/#\w+/g, "").trim().slice(0, 100)
+// }
+// function getBody(text = "") {
+//   return text.split("\n").slice(1).join("\n").trim()
+// }
 
-async function uploadToCloudinary(fileUrl, folder = "blog", resourceType = "image") {
-  const result = await cloudinary.uploader.upload(fileUrl, {
-    folder,
-    resource_type: resourceType,
-    public_id: `tg_${Date.now()}`,
-  })
-  return result.secure_url
-}
-async function getCloudinaryUrl(bot, fileId, isVideo = false) {
-  const fileLink = await bot.getFileLink(fileId)
-  return uploadToCloudinary(fileLink, "blog", isVideo ? "video" : "image")
-}
+// async function uploadToCloudinary(fileUrl, folder = "blog", resourceType = "image") {
+//   const result = await cloudinary.uploader.upload(fileUrl, {
+//     folder,
+//     resource_type: resourceType,
+//     public_id: `tg_${Date.now()}`,
+//   })
+//   return result.secure_url
+// }
+// async function getCloudinaryUrl(bot, fileId, isVideo = false) {
+//   const fileLink = await bot.getFileLink(fileId)
+//   return uploadToCloudinary(fileLink, "blog", isVideo ? "video" : "image")
+// }
 
-async function savePost(data) {
-  await Post.findOneAndUpdate({ id: data.id }, data, { upsert: true, new: true })
-  console.log(`✅ Saved: ${data.id}`)
-}
+// async function savePost(data) {
+//   await Post.findOneAndUpdate({ id: data.id }, data, { upsert: true, new: true })
+//   console.log(`✅ Saved: ${data.id}`)
+// }
 
-// ── Общий обработчик сообщения (и channel_post и пересланные) ─────────────
+// // ── Общий обработчик сообщения (и channel_post и пересланные) ─────────────
+
+// // async function handleMsg(bot, msg) {
+// //   const text = msg.text || msg.caption || ""
+// //   const title = getTitle(text) || "Без заголовка"
+// //   // const id = slugify(title)
+
+// //   // Дата: берём из оригинального поста если есть, иначе сегодня
+// //   const originalDate = msg.forward_date || msg.date
+// //   const date = new Date(originalDate * 1000).toISOString().slice(0, 10)
+// // // const id = `${slugify(title)}-${date}-${msg.message_id}`
+// // const id = `${slugify(title)}-${msg.forward_from_message_id || msg.message_id}`
+// //   const base = {
+// //     id, title, type: "company", date,
+// //     tags: extractTags(text),
+// //     url: detectVideoUrl(text),
+// //     content: getBody(text),
+// //     excerpt: title.slice(0, 120),
+// //     source: "telegram",
+// //   }
+
+// //   if (msg.photo) {
+// //     try {
+// //       const coverUrl = await getCloudinaryUrl(bot, msg.photo[msg.photo.length - 1].file_id)
+// //       await savePost({ ...base, cover: coverUrl })
+// //     } catch (e) { console.error("❌ Photo error:", e.message) }
+// //     return
+// //   }
+
+// //   if (msg.video) {
+// //     try {
+// //       const videoUrl = await getCloudinaryUrl(bot, msg.video.file_id, true)
+// //       await savePost({ ...base, video: videoUrl })
+// //     } catch (e) { console.error("❌ Video error:", e.message) }
+// //     return
+// //   }
+
+// //   if (text) {
+// //     await savePost(base)
+// //   }
+// // }
 
 // async function handleMsg(bot, msg) {
 //   const text = msg.text || msg.caption || ""
 //   const title = getTitle(text) || "Без заголовка"
-//   // const id = slugify(title)
-
-//   // Дата: берём из оригинального поста если есть, иначе сегодня
 //   const originalDate = msg.forward_date || msg.date
 //   const date = new Date(originalDate * 1000).toISOString().slice(0, 10)
-// // const id = `${slugify(title)}-${date}-${msg.message_id}`
-// const id = `${slugify(title)}-${msg.forward_from_message_id || msg.message_id}`
+//   const originId = msg.forward_from_message_id || msg.message_id
+//   const id = `${slugify(title)}-${originId}`
+
 //   const base = {
 //     id, title, type: "company", date,
 //     tags: extractTags(text),
@@ -444,75 +482,23 @@ async function savePost(data) {
 //     return
 //   }
 
-//   if (text) {
-//     await savePost(base)
-//   }
+//   if (text) await savePost(base)
 // }
 
-async function handleMsg(bot, msg) {
-  const text = msg.text || msg.caption || ""
-  const title = getTitle(text) || "Без заголовка"
-  const originalDate = msg.forward_date || msg.date
-  const date = new Date(originalDate * 1000).toISOString().slice(0, 10)
-  const originId = msg.forward_from_message_id || msg.message_id
-  const id = `${slugify(title)}-${originId}`
 
-  const base = {
-    id, title, type: "company", date,
-    tags: extractTags(text),
-    url: detectVideoUrl(text),
-    content: getBody(text),
-    excerpt: title.slice(0, 120),
-    source: "telegram",
-  }
+// // ── Media group batching ──────────────────────────────────────────────────
 
-  if (msg.photo) {
-    try {
-      const coverUrl = await getCloudinaryUrl(bot, msg.photo[msg.photo.length - 1].file_id)
-      await savePost({ ...base, cover: coverUrl })
-    } catch (e) { console.error("❌ Photo error:", e.message) }
-    return
-  }
-
-  if (msg.video) {
-    try {
-      const videoUrl = await getCloudinaryUrl(bot, msg.video.file_id, true)
-      await savePost({ ...base, video: videoUrl })
-    } catch (e) { console.error("❌ Video error:", e.message) }
-    return
-  }
-
-  if (text) await savePost(base)
-}
-
-
-// ── Media group batching ──────────────────────────────────────────────────
-
-const mediaGroups = {}
-function handleMediaGroup(bot, msg) {
-  const groupId = msg.media_group_id
-  if (!mediaGroups[groupId]) {
-    mediaGroups[groupId] = { 
-      photos: [], 
-      caption: msg.caption || "", 
-      date: msg.forward_date || msg.date,
-      // ID альбома берём из media_group_id — он одинаковый для всех фото
-      groupId: groupId
-    }
-  }
-  const group = mediaGroups[groupId]
-  if (msg.photo) group.photos.push(msg.photo)
-
-  clearTimeout(group.timer)
-  group.timer = setTimeout(async () => {
-    await processAlbum(bot, group)
-    delete mediaGroups[groupId]
-  }, 1500)
-}
+// const mediaGroups = {}
 // function handleMediaGroup(bot, msg) {
 //   const groupId = msg.media_group_id
 //   if (!mediaGroups[groupId]) {
-//     mediaGroups[groupId] = { photos: [], caption: msg.caption || "", date: msg.forward_date || msg.date }
+//     mediaGroups[groupId] = { 
+//       photos: [], 
+//       caption: msg.caption || "", 
+//       date: msg.forward_date || msg.date,
+//       // ID альбома берём из media_group_id — он одинаковый для всех фото
+//       groupId: groupId
+//     }
 //   }
 //   const group = mediaGroups[groupId]
 //   if (msg.photo) group.photos.push(msg.photo)
@@ -523,15 +509,53 @@ function handleMediaGroup(bot, msg) {
 //     delete mediaGroups[groupId]
 //   }, 1500)
 // }
+// // function handleMediaGroup(bot, msg) {
+// //   const groupId = msg.media_group_id
+// //   if (!mediaGroups[groupId]) {
+// //     mediaGroups[groupId] = { photos: [], caption: msg.caption || "", date: msg.forward_date || msg.date }
+// //   }
+// //   const group = mediaGroups[groupId]
+// //   if (msg.photo) group.photos.push(msg.photo)
+
+// //   clearTimeout(group.timer)
+// //   group.timer = setTimeout(async () => {
+// //     await processAlbum(bot, group)
+// //     delete mediaGroups[groupId]
+// //   }, 1500)
+// // }
+
+// // async function processAlbum(bot, group) {
+// //   try {
+// //     const { photos, caption, date: rawDate } = group
+// //     const text  = caption || ""
+// //     const title = getTitle(text) || "Без заголовка"
+// //     // const id    = slugify(title)
+// //     const id = `${slugify(title)}-${date}`
+// //     const date  = new Date(rawDate * 1000).toISOString().slice(0, 10)
+
+// //     const fileIds = photos.map(ph => ph[ph.length - 1].file_id)
+// //     const cdnUrls = await Promise.all(fileIds.map(fid => getCloudinaryUrl(bot, fid)))
+// //     const [cover, ...restPhotos] = cdnUrls
+
+// //     await savePost({
+// //       id, title, type: "company", date,
+// //       tags: extractTags(text), cover, photos: restPhotos,
+// //       url: detectVideoUrl(text), content: getBody(text),
+// //       excerpt: title.slice(0, 120), source: "telegram",
+// //     })
+// //   } catch (e) {
+// //     console.error("❌ Album error:", e.message)
+// //   }
+// // }
 
 // async function processAlbum(bot, group) {
 //   try {
-//     const { photos, caption, date: rawDate } = group
+//     const { photos, caption, date: rawDate, groupId } = group
 //     const text  = caption || ""
 //     const title = getTitle(text) || "Без заголовка"
-//     // const id    = slugify(title)
-//     const id = `${slugify(title)}-${date}`
 //     const date  = new Date(rawDate * 1000).toISOString().slice(0, 10)
+//     // используем groupId для уникальности альбома
+//     const id    = `${slugify(title)}-${groupId}`
 
 //     const fileIds = photos.map(ph => ph[ph.length - 1].file_id)
 //     const cdnUrls = await Promise.all(fileIds.map(fid => getCloudinaryUrl(bot, fid)))
@@ -548,24 +572,251 @@ function handleMediaGroup(bot, msg) {
 //   }
 // }
 
+// // ── Bot factory ───────────────────────────────────────────────────────────
+
+// function createBot(app) {
+//   const token      = process.env.TELEGRAM_BOT_TOKEN
+//   const channelId  = process.env.TELEGRAM_CHANNEL_ID
+//   const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL
+
+//   if (!token) {
+//     console.warn("⚠️  TELEGRAM_BOT_TOKEN not set, bot disabled")
+//     return null
+//   }
+
+//   const bot = new TelegramBot(token)
+
+//   bot.setWebHook(`${webhookUrl}/webhook`)
+//     .then(() => console.log(`🔗 Webhook set: ${webhookUrl}/webhook`))
+//     .catch(e  => console.error("❌ Webhook error:", e.message))
+
+//   app.post(`/webhook`, (req, res) => {
+//     console.log("📥 Webhook received:", JSON.stringify(req.body).slice(0, 100))
+//     bot.processUpdate(req.body)
+//     res.sendStatus(200)
+//   })
+
+//   // ── Посты из канала (новые) ──────────────────────────────────────────
+//   bot.on("channel_post", async (msg) => {
+//     if (channelId && String(msg.chat.id) !== String(channelId)) return
+//     console.log("📨 channel_post from:", msg.chat.id)
+//     if (msg.media_group_id) return handleMediaGroup(bot, msg)
+//     await handleMsg(bot, msg)
+//   })
+
+//   // ── Пересланные сообщения боту в личку ──────────────────────────────
+//   bot.on("message", async (msg) => {
+//     // Только пересланные из канала
+//     if (!msg.forward_from_chat && !msg.forward_origin) return
+//     console.log("📨 Forwarded message received")
+//     if (msg.media_group_id) return handleMediaGroup(bot, msg)
+//     await handleMsg(bot, msg)
+//   })
+
+//   console.log("🤖 Telegram bot (webhook) started")
+//   return bot
+// }
+
+// module.exports = { createBot }
+
+
+const TelegramBot = require("node-telegram-bot-api")
+const cloudinary  = require("../cloudinary.config")
+const Post        = require("../bot/Post")
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function slugify(str = "") {
+  return str
+    .toLowerCase()
+    .replace(/[^a-zа-яё0-9\s]/gi, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 50) || "post"
+}
+
+function detectVideoUrl(text = "") {
+  const match = text.match(
+    /(https?:\/\/(?:youtu\.be\/|(?:www\.)?youtube\.com\/watch\?v=|rumble\.com\/)[^\s]+)/
+  )
+  return match ? match[1] : null
+}
+
+function extractTags(text = "") {
+  return [...text.matchAll(/#(\w+)/g)].map(m => m[1])
+}
+
+function getTitle(text = "") {
+  return text.split("\n")[0].replace(/#\w+/g, "").trim().slice(0, 100)
+}
+
+function getBody(text = "") {
+  return text.split("\n").slice(1).join("\n").trim()
+}
+
+// ── Уникальный ID поста ────────────────────────────────────────────────────
+//
+// Формат: tg-{chatId}-{messageId}
+// • channel_post          → chatId = канал,    messageId = msg.message_id
+// • forwarded в личку     → chatId = оригинал, messageId = forward_from_message_id
+// • альбом                → tg-album-{media_group_id}
+//
+// Таким образом один и тот же пост канала ВСЕГДА получит один и тот же ID,
+// независимо от того, пришёл ли он как channel_post или был переслан боту.
+
+function makePostId(msg) {
+  const originMsgId  = msg.forward_from_message_id || msg.message_id
+  const originChatId = msg.forward_from_chat?.id || msg.chat.id
+  return `tg-${originChatId}-${originMsgId}`
+}
+
+function makeAlbumId(mediaGroupId) {
+  return `tg-album-${mediaGroupId}`
+}
+
+// ── Cloudinary — дедупликация по file_unique_id ───────────────────────────
+//
+// Telegram присваивает каждому файлу стабильный file_unique_id.
+// Используем его как public_id в Cloudinary → повторная отправка
+// того же файла вернёт уже существующий URL, а не создаст новый.
+
+async function uploadToCloudinary(fileUrl, fileUniqueId, folder = "blog", resourceType = "image") {
+  const publicId = `${folder}/${fileUniqueId}`
+
+  // Сначала проверяем — вдруг файл уже есть
+  try {
+    const existing = await cloudinary.api.resource(publicId, { resource_type: resourceType })
+    console.log(`☁️  Cloudinary: already exists — ${publicId}`)
+    return existing.secure_url
+  } catch (_) {
+    // 404 — файла нет, загружаем
+  }
+
+  const result = await cloudinary.uploader.upload(fileUrl, {
+    folder,
+    resource_type: resourceType,
+    public_id:     fileUniqueId,   // стабильный ID файла от Telegram
+    overwrite:     false,          // не перезаписывать существующий
+  })
+  console.log(`☁️  Cloudinary: uploaded — ${publicId}`)
+  return result.secure_url
+}
+
+async function getCloudinaryUrl(bot, photo, isVideo = false) {
+  const fileObj      = Array.isArray(photo) ? photo[photo.length - 1] : photo
+  const fileLink     = await bot.getFileLink(fileObj.file_id)
+  const fileUniqueId = fileObj.file_unique_id
+  return uploadToCloudinary(fileLink, fileUniqueId, "blog", isVideo ? "video" : "image")
+}
+
+// ── MongoDB — upsert по id ─────────────────────────────────────────────────
+//
+// findOneAndUpdate + upsert гарантирует идемпотентность:
+// повторный вызов с тем же id просто обновит документ, не создаст новый.
+// unique-индекс на поле id в схеме Post добавляет защиту на уровне БД.
+
+async function savePost(data) {
+  const doc = await Post.findOneAndUpdate(
+    { id: data.id },
+    { $set: data },           // $set — не стирает поля, которых нет в data
+    { upsert: true, new: true }
+  )
+  console.log(`✅ MongoDB saved: ${data.id}`)
+  return doc
+}
+
+// ── Обработка одиночного сообщения ────────────────────────────────────────
+
+async function handleMsg(bot, msg) {
+  const text  = msg.text || msg.caption || ""
+  const title = getTitle(text) || "Без заголовка"
+
+  // Дата оригинального поста (Unix → ISO)
+  const rawDate = msg.forward_date || msg.date
+  const date    = new Date(rawDate * 1000).toISOString().slice(0, 10)
+
+  // Стабильный уникальный ID
+  const id = makePostId(msg)
+
+  const base = {
+    id, title, type: "company", date,
+    tags:    extractTags(text),
+    url:     detectVideoUrl(text),
+    content: getBody(text),
+    excerpt: title.slice(0, 120),
+    source:  "telegram",
+  }
+
+  if (msg.photo) {
+    try {
+      const coverUrl = await getCloudinaryUrl(bot, msg.photo)
+      await savePost({ ...base, cover: coverUrl })
+    } catch (e) { console.error("❌ Photo error:", e.message) }
+    return
+  }
+
+  if (msg.video) {
+    try {
+      const videoUrl = await getCloudinaryUrl(bot, msg.video, true)
+      await savePost({ ...base, video: videoUrl })
+    } catch (e) { console.error("❌ Video error:", e.message) }
+    return
+  }
+
+  if (text) await savePost(base)
+}
+
+// ── Обработка альбомов (media_group) ──────────────────────────────────────
+//
+// Telegram шлёт фото одного альбома несколькими апдейтами с одним
+// media_group_id. Собираем их за 1.5 сек, потом обрабатываем разом.
+// ID альбома = tg-album-{media_group_id} — всегда одинаковый.
+
+const mediaGroups = {}
+
+function handleMediaGroup(bot, msg) {
+  const groupId = msg.media_group_id
+
+  if (!mediaGroups[groupId]) {
+    mediaGroups[groupId] = {
+      photos:   [],
+      caption:  msg.caption || "",
+      rawDate:  msg.forward_date || msg.date,
+      groupId,
+    }
+  }
+
+  const group = mediaGroups[groupId]
+  if (msg.photo) group.photos.push(msg.photo)
+
+  clearTimeout(group.timer)
+  group.timer = setTimeout(async () => {
+    await processAlbum(bot, group)
+    delete mediaGroups[groupId]
+  }, 1500)
+}
+
 async function processAlbum(bot, group) {
   try {
-    const { photos, caption, date: rawDate, groupId } = group
+    const { photos, caption, rawDate, groupId } = group
     const text  = caption || ""
     const title = getTitle(text) || "Без заголовка"
     const date  = new Date(rawDate * 1000).toISOString().slice(0, 10)
-    // используем groupId для уникальности альбома
-    const id    = `${slugify(title)}-${groupId}`
+    const id    = makeAlbumId(groupId)   // стабильный ID альбома
 
-    const fileIds = photos.map(ph => ph[ph.length - 1].file_id)
-    const cdnUrls = await Promise.all(fileIds.map(fid => getCloudinaryUrl(bot, fid)))
+    // Загружаем все фото (дедупликация через file_unique_id)
+    const cdnUrls = await Promise.all(photos.map(ph => getCloudinaryUrl(bot, ph)))
     const [cover, ...restPhotos] = cdnUrls
 
     await savePost({
       id, title, type: "company", date,
-      tags: extractTags(text), cover, photos: restPhotos,
-      url: detectVideoUrl(text), content: getBody(text),
-      excerpt: title.slice(0, 120), source: "telegram",
+      tags:    extractTags(text),
+      cover,
+      photos:  restPhotos,
+      url:     detectVideoUrl(text),
+      content: getBody(text),
+      excerpt: title.slice(0, 120),
+      source:  "telegram",
     })
   } catch (e) {
     console.error("❌ Album error:", e.message)
@@ -590,25 +841,24 @@ function createBot(app) {
     .then(() => console.log(`🔗 Webhook set: ${webhookUrl}/webhook`))
     .catch(e  => console.error("❌ Webhook error:", e.message))
 
-  app.post(`/webhook`, (req, res) => {
-    console.log("📥 Webhook received:", JSON.stringify(req.body).slice(0, 100))
+  app.post("/webhook", (req, res) => {
+    console.log("📥 Webhook:", JSON.stringify(req.body).slice(0, 120))
     bot.processUpdate(req.body)
     res.sendStatus(200)
   })
 
-  // ── Посты из канала (новые) ──────────────────────────────────────────
+  // Новые посты канала
   bot.on("channel_post", async (msg) => {
     if (channelId && String(msg.chat.id) !== String(channelId)) return
-    console.log("📨 channel_post from:", msg.chat.id)
+    console.log("📨 channel_post:", msg.chat.id, "msg_id:", msg.message_id)
     if (msg.media_group_id) return handleMediaGroup(bot, msg)
     await handleMsg(bot, msg)
   })
 
-  // ── Пересланные сообщения боту в личку ──────────────────────────────
+  // Пересланные боту в личку (для ручного добавления старых постов)
   bot.on("message", async (msg) => {
-    // Только пересланные из канала
     if (!msg.forward_from_chat && !msg.forward_origin) return
-    console.log("📨 Forwarded message received")
+    console.log("📨 Forwarded msg, origin_id:", msg.forward_from_message_id)
     if (msg.media_group_id) return handleMediaGroup(bot, msg)
     await handleMsg(bot, msg)
   })
