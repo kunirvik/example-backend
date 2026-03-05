@@ -836,6 +836,7 @@ function createBot(app) {
 
   // Пересланные боту в личку (для ручного добавления старых постов)
   bot.on("message", async (msg) => {
+      if (String(msg.from.id) !== String(process.env.ADMIN_TELEGRAM_ID)) return
     if (!msg.forward_from_chat && !msg.forward_origin) return
     console.log("📨 Forwarded msg, origin_id:", msg.forward_from_message_id)
     if (msg.media_group_id) return handleMediaGroup(bot, msg)
