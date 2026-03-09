@@ -1,4 +1,36 @@
+// const { loadCompanyPosts } = require("./loadCompanyPosts")
+// // const { loadPinkbikePosts } = require("./loadPinkbikePosts")
+// // const { loadYoutubePostsFromMd } = require("./loadYoutubePostsFromMd")
+// const { loadVideoPosts } = require("./loadVideoPosts")
+// async function loadAllPosts() {
+//   const [
+//     company,
+//     youtube,
+//     // pinkbike
+//   ] = await Promise.all([
+//     loadCompanyPosts(),
+//     // loadYoutubePostsFromMd(),
+//     loadVideoPosts(),
+//     // loadPinkbikePosts()
+//   ])
 
+// //   return [...company, ...youtube, ...pinkbike]
+
+//  return [...company, ...youtube]
+//     .sort((a, b) => new Date(b.date) - new Date(a.date))
+// }
+
+// async function loadPostById(id) {
+//   const posts = await loadAllPosts()
+//   return posts.find(p => p.id === id)
+// }
+
+// module.exports = { 
+//   loadAllPosts,
+//   loadPostById
+
+
+//  }
 
 const Post = require("../bot/Post")
 const fs   = require("fs")
