@@ -109,7 +109,12 @@ async function loadAllPosts() {
   const uniqueFilePosts = filePosts.filter(p => !mongoIds.has(p.id))
 
   return [...mongoPosts, ...uniqueFilePosts]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+
+    .sort((a, b) => {
+  const aTime = new Date(a.updatedAt || a.date)
+  const bTime = new Date(b.updatedAt || b.date)
+  return bTime - aTime
+})
 }
 
 async function loadPostById(id) {

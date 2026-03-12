@@ -204,6 +204,8 @@ app.put("/api/blog/:id", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+
+
 app.delete("/api/blog/:id", auth, async (req, res) => {
   try {
     await Post.deleteOne({ id: req.params.id })
@@ -211,6 +213,15 @@ app.delete("/api/blog/:id", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+
+app.post("/api/blog/:id/bump", auth, async (req, res) => {
+  const post = await Post.findOneAndUpdate(
+    { id: req.params.id },
+    { updatedAt: new Date() },
+    { returnDocument: "after" }
+  )
+  res.json(post)
+})
 // ── Start ─────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 5001
