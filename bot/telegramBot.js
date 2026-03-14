@@ -774,6 +774,7 @@ function handleMediaGroup(bot, msg) {
       caption:  msg.caption || "",
       rawDate:  msg.forward_date || msg.date,
       groupId,
+       originMsgId: msg.forward_from_message_id || msg.message_id,
     }
   }
 
@@ -789,7 +790,7 @@ function handleMediaGroup(bot, msg) {
 
 async function processAlbum(bot, group) {
   try {
-    const { photos, caption, rawDate, groupId } = group
+    const { photos, caption, rawDate, groupId, originMsgId} = group
     const text  = caption || ""
     const title = getTitle(text) || "Без заголовка"
     const date  = new Date(rawDate * 1000).toISOString().slice(0, 10)
