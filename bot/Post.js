@@ -14,6 +14,8 @@ const PostSchema = new mongoose.Schema({
   excerpt: String,
   content: String,
   source:  { type: String, default: "telegram" },
+  telegramUrl: String,
+
 }, { timestamps: true })
 
 module.exports = mongoose.model("Post", PostSchema)

@@ -708,6 +708,12 @@ async function savePost(data) {
   return doc
 }
 
+
+function makeTelegramUrl(msgId) {
+  const username = process.env.TELEGRAM_CHANNEL_USERNAME
+  if (!username || !msgId) return null
+  return `https://t.me/${username}/${msgId}`
+}
 // ── Обработка одиночного сообщения ────────────────────────────────────────
 
 async function handleMsg(bot, msg) {
@@ -721,6 +727,11 @@ async function handleMsg(bot, msg) {
   // Стабильный уникальный ID
   const id = makePostId(msg)
 
+
+// ↓ originMsgId нужен для URL (message_id поста в канале)
+  const originMsgId = msg.forward_from_message_id || msg.message_id
+
+
   const base = {
     id, title, type: "company", date,
     tags:    extractTags(text),
@@ -728,6 +739,7 @@ async function handleMsg(bot, msg) {
     content: getBody(text),
     excerpt: title.slice(0, 120),
     source:  "telegram",
+     telegramUrl: makeTelegramUrl(originMsgId),
   }
 
   if (msg.photo) {
@@ -796,6 +808,7 @@ async function processAlbum(bot, group) {
       content: getBody(text),
       excerpt: title.slice(0, 120),
       source:  "telegram",
+      telegramUrl: makeTelegramUrl(originMsgId),  
     })
   } catch (e) {
     console.error("❌ Album error:", e.message)
