@@ -96,7 +96,9 @@ function loadVideoPostsFromFiles() {
 
 async function loadAllPosts() {
   // 1. Posts from MongoDB (Telegram bot)
-  const mongoPosts = await Post.find({}).lean()
+  // const mongoPosts = await Post.find({}).lean()
+
+const mongoPosts = await Post.find({ status: "published" }).lean()
 
   // 2. Legacy posts from markdown files
   const filePosts = [
