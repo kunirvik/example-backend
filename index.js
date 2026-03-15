@@ -225,13 +225,41 @@ app.put("/api/blog/:id", auth, async (req, res) => {
 
 
 
+// app.delete("/api/blog/:id", auth, async (req, res) => {
+//   try {
+//     await Post.deleteOne({ id: req.params.id })
+//     res.json({ ok: true })
+//   } catch (e) { res.status(500).json({ error: e.message }) }
+// })
 app.delete("/api/blog/:id", auth, async (req, res) => {
   try {
+    const post = await Post.findOne({ id: req.params.id })
+    if (!post) return res.status(404).json({ error: "Not found" })
+
+    // Собираем все Cloudinary URL из поста
+    const allUrls = [
+      post.cover,
+      post.video,
+      ...(post.photos || []),
+      ...(post.videos || []),
+    ].filter(Boolean)
+
+    // Удаляем каждый ресурс из Cloudinary
+    await Promise.allSettled(
+      allUrls.map(url => {
+        // Извлекаем public_id из URL: .../blog/filename → blog/filename
+        const match = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i)
+        if (!match) return Promise.resolve()
+        const publicId    = match[1]
+        const resourceType = url.match(/\.(mp4|webm|mov)$/i) ? "video" : "image"
+        return cloudinary.uploader.destroy(publicId, { resource_type: resourceType })
+      })
+    )
+
     await Post.deleteOne({ id: req.params.id })
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-
 
 app.post("/api/blog/:id/bump", auth, async (req, res) => {
   const post = await Post.findOneAndUpdate(
