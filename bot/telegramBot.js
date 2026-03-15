@@ -740,6 +740,7 @@ async function handleMsg(bot, msg) {
     excerpt: title.slice(0, 120),
     source:  "telegram",
      telegramUrl: makeTelegramUrl(originMsgId),
+       status: "pending",
   }
 
   if (msg.photo) {

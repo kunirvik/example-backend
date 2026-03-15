@@ -161,10 +161,29 @@ function auth(req, res, next) {
 
 app.get("/", (req, res) => res.json({ status: "ok" }))
 
+
+
+// app.get("/api/blog", async (req, res) => {
+//   try { res.json(await loadAllPosts()) }
+//   catch (e) { res.status(500).json({ error: "Blog load error" }) }
+// })
 app.get("/api/blog", async (req, res) => {
-  try { res.json(await loadAllPosts()) }
+  try {
+    const isAdmin = req.headers["x-admin-key"] === process.env.ADMIN_KEY
+    const showAll = isAdmin && req.query.all === "1"
+
+    if (showAll) {
+      // Админ видит все посты включая pending
+      const mongoPosts = await Post.find({}).lean()
+      res.json(mongoPosts)
+    } else {
+      // Публика и обычные запросы — только published
+      res.json(await loadAllPosts())
+    }
+  }
   catch (e) { res.status(500).json({ error: "Blog load error" }) }
 })
+
 
 app.get("/api/blog/:id", async (req, res) => {
   try {
@@ -221,6 +240,17 @@ app.post("/api/blog/:id/bump", auth, async (req, res) => {
     { returnDocument: "after" }
   )
   res.json(post)
+})
+
+app.patch("/api/blog/:id/approve", auth, async (req, res) => {
+  try {
+    const post = await Post.findOneAndUpdate(
+      { id: req.params.id },
+      { status: "published" },
+      { returnDocument: "after" }
+    )
+    res.json(post)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 // ── Start ─────────────────────────────────────────────────────────────────
 

@@ -15,7 +15,7 @@ const PostSchema = new mongoose.Schema({
   content: String,
   source:  { type: String, default: "telegram" },
   telegramUrl: String,
-
+status: { type: String, default: "pending", enum: ["pending", "published"] },  
 }, { timestamps: true })
 
 module.exports = mongoose.model("Post", PostSchema)
