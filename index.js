@@ -134,6 +134,7 @@ const mongoose   = require("mongoose")
 const multer     = require("multer")
 const cloudinary = require("./cloudinary.config")
 const Post       = require("./bot/Post")
+const Listing    = require("./bot/Listing")
 
 const { createBot }                  = require("./bot/telegramBot")
 const { createMarketplaceBot,
@@ -357,4 +358,5 @@ const PORT = process.env.PORT || 5001
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
   createBot(app)
+    createMarketplaceBot(app) 
 })
