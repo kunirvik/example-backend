@@ -126,20 +126,20 @@
 //   createBot(app) // passes `app` so the bot can register its /bot<token> route
 // })
 
-
 require("dotenv").config()
 const express    = require("express")
 const cors       = require("cors")
 const mongoose   = require("mongoose")
 const multer     = require("multer")
-const cloudinary = require("./cloudinary.config")
-const Post       = require("./bot/Post")
+const cloudinary = require("./cloudinary.config.js")
+const Post       = require("./bot/Post.js")
 const Listing    = require("./bot/Listing")
 
 const { createBot }                  = require("./bot/telegramBot")
 const { createMarketplaceBot,
         notifyApproved,
         notifyRejected,
+        recordRejection,  // 4. Импортируем новую функцию
         TTL_DAYS }                       = require("./bot/Marketplacebot")
 const { loadAllPosts, loadPostById } = require("./blog/index")
 const { startListingsCron }              = require("./bot/listings.cron.js")
@@ -170,12 +170,6 @@ function auth(req, res, next) {
 
 app.get("/", (req, res) => res.json({ status: "ok" }))
 
-
-
-// app.get("/api/blog", async (req, res) => {
-//   try { res.json(await loadAllPosts()) }
-//   catch (e) { res.status(500).json({ error: "Blog load error" }) }
-// })
 app.get("/api/blog", async (req, res) => {
   try {
     const isAdmin = req.headers["x-admin-key"] === process.env.ADMIN_KEY
@@ -232,14 +226,6 @@ app.put("/api/blog/:id", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-
-
-// app.delete("/api/blog/:id", auth, async (req, res) => {
-//   try {
-//     await Post.deleteOne({ id: req.params.id })
-//     res.json({ ok: true })
-//   } catch (e) { res.status(500).json({ error: e.message }) }
-// })
 app.delete("/api/blog/:id", auth, async (req, res) => {
   try {
     const post = await Post.findOne({ id: req.params.id })
@@ -289,8 +275,8 @@ app.patch("/api/blog/:id/approve", auth, async (req, res) => {
     res.json(post)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
-// ── Start ─────────────────────────────────────────────────────────────────
 
+// ── MARKETPLACE API ───────────────────────────────────────────────────────
  
 // Список объявлений
 // Публично: только published
@@ -301,6 +287,36 @@ app.get("/api/listings", async (req, res) => {
     const filter  = (isAdmin && req.query.all === "1") ? {} : { status: "published" }
     res.json(await Listing.find(filter).sort({ createdAt: -1 }).lean())
   } catch (e) { res.status(500).json({ error: "Listings load error" }) }
+})
+
+// 6. НОВЫЙ ENDPOINT: Просмотр конкретного объявления с увеличением счетчика
+app.get("/api/listings/:id", async (req, res) => {
+  try {
+    const listing = await Listing.findOne({ id: req.params.id }).lean()
+    
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found" })
+    }
+    
+    // Увеличиваем счетчик просмотров (только для опубликованных)
+    if (listing.status === "published") {
+      await Listing.updateOne(
+        { id: req.params.id },
+        { 
+          $inc: { viewCount: 1 },
+          $set: { lastViewedAt: new Date() }
+        }
+      )
+      
+      // Обновляем объект для ответа
+      listing.viewCount = (listing.viewCount || 0) + 1
+      listing.lastViewedAt = new Date()
+    }
+    
+    res.json(listing)
+  } catch (e) { 
+    res.status(500).json({ error: "Listing load error" }) 
+  }
 })
  
 // Одобрить → published + expiresAt + уведомление продавцу
@@ -321,7 +337,7 @@ app.patch("/api/listings/:id/approve", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
  
-// Отклонить → rejected + причина + уведомление
+// 4. ОБНОВЛЕНО: Отклонить → rejected + причина + уведомление + recordRejection
 app.patch("/api/listings/:id/reject", auth, async (req, res) => {
   try {
     const reason  = req.body.reason || ""
@@ -331,7 +347,11 @@ app.patch("/api/listings/:id/reject", auth, async (req, res) => {
       { returnDocument: "after", new: true }
     )
     if (!listing) return res.status(404).json({ error: "Not found" })
+    
+    // ВАЖНО: Вызываем recordRejection для учета в дневном лимите
+    // Эта функция автоматически вызывается внутри notifyRejected
     notifyRejected(listing, reason).catch(() => {})
+    
     res.json(listing)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -353,10 +373,46 @@ app.delete("/api/listings/:id", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// 6. НОВЫЙ ENDPOINT: Статистика по категориям
+app.get("/api/listings/stats/categories", async (req, res) => {
+  try {
+    const stats = await Listing.aggregate([
+      { $match: { status: "published" } },
+      { 
+        $group: {
+          _id: "$category",
+          count: { $sum: 1 },
+          totalViews: { $sum: "$viewCount" },
+          avgViews: { $avg: "$viewCount" }
+        }
+      },
+      { $sort: { count: -1 } }
+    ])
+    res.json(stats)
+  } catch (e) {
+    res.status(500).json({ error: "Stats load error" })
+  }
+})
+
+// 6. НОВЫЙ ENDPOINT: Топ объявлений по просмотрам
+app.get("/api/listings/stats/top-viewed", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10
+    const topListings = await Listing.find({ status: "published" })
+      .sort({ viewCount: -1 })
+      .limit(limit)
+      .lean()
+    res.json(topListings)
+  } catch (e) {
+    res.status(500).json({ error: "Top listings load error" })
+  }
+})
+
+// ── Start ─────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 5001
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`)
   createBot(app)
-    createMarketplaceBot(app) 
+  createMarketplaceBot(app) 
 })

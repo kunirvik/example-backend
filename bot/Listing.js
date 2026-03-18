@@ -9,7 +9,7 @@ const ListingSchema = new mongoose.Schema(
     category: {
       type: String,
       default: "other",
-      enum: ["bikes", "parts", "clothing", "electronics", "other"],
+      enum: ["mtb", "bmx", "skate", "parts", "clothing", "other"],  // Обновлены категории
     },
     photos:           [String],
     contactUsername:  { type: String, default: "" },
@@ -24,12 +24,34 @@ const ListingSchema = new mongoose.Schema(
     rejectReason: { type: String, default: "" },
     expiresAt:    { type: Date, default: null },
     publishedAt:  { type: Date, default: null },
+    
+    // ── НОВЫЕ ПОЛЯ ───────────────────────────────────────────────────────────
+    
+    // 6. Счетчик просмотров
+    viewCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    
+    // Опционально: массив для отслеживания уникальных просмотров
+    viewedBy: [{
+      userId: String,
+      viewedAt: Date
+    }],
+    
+    // Последний просмотр
+    lastViewedAt: { type: Date, default: null },
   },
   { timestamps: true }
 )
 
+// ── ИНДЕКСЫ ──────────────────────────────────────────────────────────────────
+
 ListingSchema.index({ status: 1 })
 ListingSchema.index({ telegramId: 1, status: 1 })
 ListingSchema.index({ expiresAt: 1, status: 1 })
+ListingSchema.index({ viewCount: -1 })  // Для сортировки по популярности
+ListingSchema.index({ category: 1, status: 1 })  // Для фильтрации по категориям
 
 module.exports = mongoose.model("Listing", ListingSchema)
