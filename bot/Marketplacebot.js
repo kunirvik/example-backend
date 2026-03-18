@@ -140,9 +140,9 @@ async function onMessage(bot, msg) {
   if (text === "/start") {
     resetSession(uid)
     return bot.sendMessage(msg.chat.id,
-      `👋 Привет! Это барахолка.\n\nБесплатно размещай объявления о продаже.\nМаксимум *${MAX_ACTIVE}* активных объявления.\nСрок действия — *${TTL_DAYS} дней* после одобрения.`,
+      `👋 Привет! Это барахолка\\.\n\nБесплатно размещай объявления о продаже\\.\nМаксимум *${MAX_ACTIVE}* активных объявления\\.\nСрок действия — *${TTL_DAYS} дней* после одобрения\\.`,
       {
-        parse_mode: "Markdown",
+        parse_mode: "MarkdownV2",
         reply_markup: { inline_keyboard: [[
           { text: "📝 Подать объявление", callback_data: "start" },
           { text: "📋 Мои объявления",    callback_data: "mine"  },
@@ -237,6 +237,7 @@ async function onCallback(bot, q) {
       return bot.sendMessage(chatId, `⚠️ У вас уже ${count} активных объявления (макс. ${MAX_ACTIVE}).\nДождитесь истечения или напишите администратору.`)
     }
     resetSession(uid)
+    const s = getSession(uid)  // ← берём СВЕЖУЮ сессию после сброса
     s.step = "category"
     return bot.sendMessage(chatId, "📦 *Шаг 1 из 5* — Выберите категорию:", {
       parse_mode: "Markdown",
