@@ -140,9 +140,9 @@ async function onMessage(bot, msg) {
   if (text === "/start") {
     resetSession(uid)
     return bot.sendMessage(msg.chat.id,
-      `👋 Привет! Это барахолка\\.\n\nБесплатно размещай объявления о продаже\\.\nМаксимум *${MAX_ACTIVE}* активных объявления\\.\nСрок действия — *${TTL_DAYS} дней* после одобрения\\.`,
+      `👋 Привет! Это барахолка.\n\nБесплатно размещай объявления о продаже.\nМаксимум *${MAX_ACTIVE}* активных объявления.\nСрок действия — *${TTL_DAYS} дней* после одобрения.`,
       {
-        parse_mode: "MarkdownV2",
+        parse_mode: "Markdown",
         reply_markup: { inline_keyboard: [[
           { text: "📝 Подать объявление", callback_data: "start" },
           { text: "📋 Мои объявления",    callback_data: "mine"  },
