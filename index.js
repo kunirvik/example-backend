@@ -136,7 +136,13 @@ const cloudinary = require("./cloudinary.config")
 const Post       = require("./bot/Post")
 
 const { createBot }                  = require("./bot/telegramBot")
+const { createMarketplaceBot,
+        notifyApproved,
+        notifyRejected,
+        TTL_DAYS }                       = require("./bot/Marketplacebot")
 const { loadAllPosts, loadPostById } = require("./blog/index")
+const { startListingsCron }              = require("./bot/listings.cron")
+
 
 const app    = express()
 const upload = multer({ storage: multer.memoryStorage() })
@@ -146,7 +152,9 @@ app.use(express.json())
 
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ MongoDB connected"))
+  .then(() => {console.log("✅ MongoDB connected")
+    startListingsCron()
+  })
   .catch(e  => console.error("❌ MongoDB error:", e.message))
 
 // ── Auth middleware ───────────────────────────────────────────────────────
@@ -281,6 +289,69 @@ app.patch("/api/blog/:id/approve", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 // ── Start ─────────────────────────────────────────────────────────────────
+
+ 
+// Список объявлений
+// Публично: только published
+// Админ + ?all=1: все статусы
+app.get("/api/listings", async (req, res) => {
+  try {
+    const isAdmin = req.headers["x-admin-key"] === process.env.ADMIN_KEY
+    const filter  = (isAdmin && req.query.all === "1") ? {} : { status: "published" }
+    res.json(await Listing.find(filter).sort({ createdAt: -1 }).lean())
+  } catch (e) { res.status(500).json({ error: "Listings load error" }) }
+})
+ 
+// Одобрить → published + expiresAt + уведомление продавцу
+app.patch("/api/listings/:id/approve", auth, async (req, res) => {
+  try {
+    const now       = new Date()
+    const expiresAt = new Date(now)
+    expiresAt.setDate(expiresAt.getDate() + TTL_DAYS)
+ 
+    const listing = await Listing.findOneAndUpdate(
+      { id: req.params.id },
+      { status: "published", publishedAt: now, expiresAt },
+      { returnDocument: "after", new: true }
+    )
+    if (!listing) return res.status(404).json({ error: "Not found" })
+    notifyApproved(listing).catch(() => {})
+    res.json(listing)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+ 
+// Отклонить → rejected + причина + уведомление
+app.patch("/api/listings/:id/reject", auth, async (req, res) => {
+  try {
+    const reason  = req.body.reason || ""
+    const listing = await Listing.findOneAndUpdate(
+      { id: req.params.id },
+      { status: "rejected", rejectReason: reason },
+      { returnDocument: "after", new: true }
+    )
+    if (!listing) return res.status(404).json({ error: "Not found" })
+    notifyRejected(listing, reason).catch(() => {})
+    res.json(listing)
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+ 
+// Удалить + фото из Cloudinary
+app.delete("/api/listings/:id", auth, async (req, res) => {
+  try {
+    const listing = await Listing.findOne({ id: req.params.id })
+    if (!listing) return res.status(404).json({ error: "Not found" })
+    await Promise.allSettled(
+      (listing.photos || []).map(url => {
+        const m = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i)
+        if (!m) return Promise.resolve()
+        return cloudinary.uploader.destroy(m[1], { resource_type: "image" })
+      })
+    )
+    await Listing.deleteOne({ id: req.params.id })
+    res.json({ ok: true })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 
 const PORT = process.env.PORT || 5001
 app.listen(PORT, () => {
