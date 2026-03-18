@@ -1,16 +1,27 @@
+#!/usr/bin/env node
+/**
+ * Скрипт міграції бази даних для оновлення бота барахолки
+ * 
+ * Використання:
+ * node migrate-listings.js
+ * 
+ * Або з явним указанням MongoDB URI:
+ * MONGODB_URI="mongodb://..." node migrate-listings.js
+ */
+
 require('dotenv').config()
 const mongoose = require('mongoose')
- 
+
 // Подключаемся к MongoDB
 const MONGODB_URI = process.env.MONGODB_URI
- 
+
 if (!MONGODB_URI) {
   console.error('❌ MONGODB_URI не знайдено в .env файлі')
   process.exit(1)
 }
- 
+
 console.log('🔄 Підключення до MongoDB...')
- 
+
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('✅ Підключено до MongoDB')
@@ -24,7 +35,7 @@ mongoose.connect(MONGODB_URI)
     console.error('❌ Помилка міграції:', err.message)
     process.exit(1)
   })
- 
+
 async function runMigration() {
   const db = mongoose.connection.db
   const listingsCollection = db.collection('listings')

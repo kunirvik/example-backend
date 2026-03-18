@@ -7,7 +7,7 @@ const MAX_DAILY   = 3  // Максимум 3 объявления в день
 const TTL_DAYS    = 14
 const COOLDOWN_MS = 15 * 60 * 1000  // 15 минут между объявлениями
 
-// ── 1. РАЗНЫЕ ПРИМЕРЫ ДЛЯ КАЖДОЙ КАТЕГОРИИ ───────────────────────────────────
+// ── КАТЕГОРІЇ З УНІКАЛЬНИМИ ПРИКЛАДАМИ ───────────────────────────────────────
 const CATEGORIES = [
   {
     id: "mtb",
@@ -51,7 +51,7 @@ const CURRENCIES = [
 
 const BANNED_PATTERNS = [/руб/i, /рублей/i, /rub\b/i, /kzt/i, /тенге/i, /бел/i]
 
-// ── 5. ВАЛИДАЦИЯ УКРАИНСКОГО НОМЕРА ───────────────────────────────────────────
+// ── ВАЛИДАЦИЯ УКРАИНСКОГО НОМЕРА ──────────────────────────────────────────────
 const UA_PHONE_REGEX = /^(\+?38)?0(39|50|63|66|67|68|73|91|92|93|94|95|96|97|98|99)\d{7}$/
 
 function validateUkrainianPhone(phone) {
@@ -67,15 +67,14 @@ function formatPhoneForDisplay(phone) {
   return phone
 }
 
-// ── Сесії FSM з історією для навігації ────────────────────────────────────────
+// ── Сесії FSM (БЕЗ ІСТОРІЇ) ──────────────────────────────────────────────────
 const sessions = new Map()
 
 function getSession(id) {
   if (!sessions.has(id)) {
     sessions.set(id, { 
       step: "idle", 
-      data: { photos: [] },
-      history: []  // 3. Історія для навігації назад
+      data: { photos: [] }
     })
   }
   return sessions.get(id)
@@ -84,31 +83,14 @@ function getSession(id) {
 function resetSession(id) {
   sessions.set(id, { 
     step: "idle", 
-    data: { photos: [] },
-    history: []
+    data: { photos: [] }
   })
-}
-
-// 3. Функції для навігації
-function pushStep(s, newStep) {
-  if (s.step !== "idle" && s.step !== newStep) {
-    s.history.push(s.step)
-  }
-  s.step = newStep
-}
-
-function goBack(s) {
-  if (s.history && s.history.length > 0) {
-    s.step = s.history.pop()
-    return true
-  }
-  return false
 }
 
 function makeId(uid) { return `listing-${uid}-${Date.now()}` }
 
-// ── 4. СИСТЕМА ДНЕВНЫХ ЛИМИТОВ И ПОПЫТОК ──────────────────────────────────────
-const dailyAttempts = new Map() // uid -> { date: string, submitted: number, rejected: number }
+// ── СИСТЕМА ДНЕВНЫХ ЛИМИТОВ ───────────────────────────────────────────────────
+const dailyAttempts = new Map()
 
 function getDailyStats(uid) {
   const today = new Date().toISOString().split("T")[0]
@@ -144,7 +126,7 @@ function recordRejection(uid) {
   stats.rejected++
 }
 
-// ── Кулдаун між оголошеннями ──────────────────────────────────────────────────
+// ── Кулдаун ───────────────────────────────────────────────────────────────────
 const cooldowns = new Map()
 
 function cooldownLeft(uid) {
@@ -217,18 +199,10 @@ function preview(data, username) {
   ].filter(Boolean).join("\n")
 }
 
-// ── 3. Кнопка "Назад" для кожного кроку ───────────────────────────────────────
-function getBackButton(s) {
-  if (s.history && s.history.length > 0) {
-    return [{ text: "◀️ Назад", callback_data: "go_back" }]
-  }
-  return []
-}
-
 // ── Крокові функції ───────────────────────────────────────────────────────────
 
 async function askCategory(bot, chatId, s) {
-  pushStep(s, "category")
+  s.step = "category"
   await bot.sendMessage(chatId, "📂 *Крок 1 з 5* — Оберіть категорію:", {
     parse_mode: "Markdown",
     reply_markup: { inline_keyboard: [
@@ -240,34 +214,30 @@ async function askCategory(bot, chatId, s) {
 }
 
 async function askTitle(bot, chatId, s) {
-  pushStep(s, "title")
+  s.step = "title"
   const cat = CATEGORIES.find(c => c.id === s.data.category)
   await bot.sendMessage(chatId,
     `✏️ *Крок 2 з 5* — Введіть назву товару:\n\n_${escMd(cat?.example || "")}_`,
-    { 
-      parse_mode: "MarkdownV2",
-      reply_markup: { inline_keyboard: [getBackButton(s)] }
-    }
+    { parse_mode: "MarkdownV2" }
   )
 }
 
 async function askDescription(bot, chatId, s) {
-  pushStep(s, "description")
+  s.step = "description"
   const cat = CATEGORIES.find(c => c.id === s.data.category)
   await bot.sendMessage(chatId,
     `📝 *Крок 3 з 5* — Опишіть товар або пропустіть:\n\n_${escMd(cat?.example || "")}_`,
     {
       parse_mode: "MarkdownV2",
-      reply_markup: { inline_keyboard: [
-        [{ text: "⏭ Пропустити", callback_data: "skip_desc" }],
-        getBackButton(s)
-      ]}
+      reply_markup: { inline_keyboard: [[
+        { text: "⏭ Пропустити", callback_data: "skip_desc" }
+      ]]}
     }
   )
 }
 
 async function askCurrency(bot, chatId, s) {
-  pushStep(s, "currency")
+  s.step = "currency"
   await bot.sendMessage(chatId,
     "💰 *Крок 4 з 5* — Оберіть тип ціни:",
     {
@@ -275,66 +245,61 @@ async function askCurrency(bot, chatId, s) {
       reply_markup: { inline_keyboard: [
         CURRENCIES.slice(0, 3).map(c => ({ text: c.label, callback_data: `cur_${c.id}` })),
         CURRENCIES.slice(3).map(c  => ({ text: c.label, callback_data: `cur_${c.id}` })),
-        getBackButton(s)
       ]},
     }
   )
 }
 
 async function askAmount(bot, chatId, s) {
-  pushStep(s, "amount")
+  s.step = "amount"
   const cur = CURRENCIES.find(c => c.id === s.data.currency)
   await bot.sendMessage(chatId,
     `${cur.label} — введіть суму цифрами:\n_Наприклад: 1500 або 50_`,
     {
       parse_mode: "Markdown",
-      reply_markup: { inline_keyboard: [
-        [{ text: "◀️ Змінити валюту", callback_data: "back_currency" }],
-        getBackButton(s)
-      ]},
+      reply_markup: { inline_keyboard: [[
+        { text: "◀️ Змінити валюту", callback_data: "back_currency" }
+      ]]},
     }
   )
 }
 
 async function askPhotos(bot, chatId, s) {
-  pushStep(s, "photos")
+  s.step = "photos"
   await bot.sendMessage(chatId,
     "📸 *Крок 5 з 5* — Додайте фото товару (до 5 штук).\n_Фото автоматично стискаються._",
     {
       parse_mode: "Markdown",
-      reply_markup: { inline_keyboard: [
-        [{ text: "⏭ Пропустити", callback_data: "skip_photos" }],
-        getBackButton(s)
-      ]},
+      reply_markup: { inline_keyboard: [[
+        { text: "⏭ Пропустити", callback_data: "skip_photos" }
+      ]]},
     }
   )
 }
 
 async function askPhone(bot, chatId, s) {
-  pushStep(s, "phone")
+  s.step = "phone"
   await bot.sendMessage(chatId,
     "📞 *Крок 6 з 6* — Телефон для зв'язку (необов'язково).\n\n" +
     "_Формат: +380XXXXXXXXX або 0XXXXXXXXX_\n" +
     "Покупці зможуть написати вам у Telegram.",
     {
       parse_mode: "Markdown",
-      reply_markup: { inline_keyboard: [
-        [{ text: "⏭ Пропустити", callback_data: "skip_phone" }],
-        getBackButton(s)
-      ]},
+      reply_markup: { inline_keyboard: [[
+        { text: "⏭ Пропустити", callback_data: "skip_phone" }
+      ]]},
     }
   )
 }
 
 async function showConfirm(bot, chatId, s, username) {
-  pushStep(s, "confirm")
+  s.step = "confirm"
   const text    = preview(s.data, username)
   const caption = text + "\n\n_Все вірно\\?_"
   const kb = {
     parse_mode: "MarkdownV2",
     reply_markup: { inline_keyboard: [
       [{ text: "✅ Надіслати на модерацію", callback_data: "confirm" }],
-      [{ text: "✏️ Редагувати", callback_data: "edit_menu" }],
       [{ text: "🔄 Заповнити знову", callback_data: "restart" }],
     ]},
   }
@@ -345,25 +310,7 @@ async function showConfirm(bot, chatId, s, username) {
   }
 }
 
-// 3. Меню редагування
-async function showEditMenu(bot, chatId, s) {
-  await bot.sendMessage(chatId,
-    "✏️ Що бажаєте змінити?",
-    {
-      reply_markup: { inline_keyboard: [
-        [{ text: "📂 Категорія", callback_data: "edit_category" }],
-        [{ text: "✏️ Назва", callback_data: "edit_title" }],
-        [{ text: "📝 Опис", callback_data: "edit_description" }],
-        [{ text: "💰 Ціна", callback_data: "edit_price" }],
-        [{ text: "📸 Фото", callback_data: "edit_photos" }],
-        [{ text: "📞 Телефон", callback_data: "edit_phone" }],
-        [{ text: "◀️ До перегляду", callback_data: "back_to_confirm" }],
-      ]},
-    }
-  )
-}
-
-// ── 2. ПРИВЕТСТВЕННАЯ СТРАНИЦА С ПРАВИЛАМИ ────────────────────────────────────
+// ── ПРИВЕТСТВЕННАЯ СТРАНИЦА ───────────────────────────────────────────────────
 
 async function showWelcome(bot, chatId, uid) {
   const remaining = getRemainingAttempts(uid)
@@ -391,7 +338,7 @@ async function showWelcome(bot, chatId, uid) {
     `• Заборонені валюти: рублі, тенге, білоруські рублі\n\n` +
     `❌ *Система спроб:*\n` +
     `• У вас є ${MAX_DAILY} спроби на день\n` +
-    `• Якщо всі ${MAX_DAILY} оголошення відхилено \\— наступна спроба завтра\n` +
+    `• Якщо всі ${MAX_DAILY} оголошення відхілено \\— наступна спроба завтра\n` +
     `• Модерація протягом 24 годин${escMd(statusText)}`,
     {
       parse_mode: "MarkdownV2",
@@ -424,14 +371,12 @@ async function onMessage(bot, msg) {
     case "title": {
       if (text.length < 3) {
         return bot.sendMessage(msg.chat.id, 
-          "⚠️ Назва занадто коротка. Мінімум 3 символи. Спробуйте ще раз:",
-          { reply_markup: { inline_keyboard: [getBackButton(s)] }}
+          "⚠️ Назва занадто коротка. Мінімум 3 символи. Спробуйте ще раз:"
         )
       }
       if (text.length > 100) {
         return bot.sendMessage(msg.chat.id, 
-          "⚠️ Назва занадто довга. Максимум 100 символів. Спробуйте ще раз:",
-          { reply_markup: { inline_keyboard: [getBackButton(s)] }}
+          "⚠️ Назва занадто довга. Максимум 100 символів. Спробуйте ще раз:"
         )
       }
       s.data.title = text
@@ -449,10 +394,9 @@ async function onMessage(bot, msg) {
           "❌ Рублі та інші заборонені валюти не приймаються.\n" +
           "Оберіть: гривня, долар, євро, обмін або договірна.",
           { 
-            reply_markup: { inline_keyboard: [
-              [{ text: "◀️ Обрати валюту", callback_data: "back_currency" }],
-              getBackButton(s)
-            ]}
+            reply_markup: { inline_keyboard: [[
+              { text: "◀️ Обрати валюту", callback_data: "back_currency" }
+            ]]}
           }
         )
       }
@@ -462,10 +406,9 @@ async function onMessage(bot, msg) {
           "⚠️ Введіть суму цифрами, наприклад *1500* або *50*",
           {
             parse_mode: "Markdown",
-            reply_markup: { inline_keyboard: [
-              [{ text: "◀️ Змінити валюту", callback_data: "back_currency" }],
-              getBackButton(s)
-            ]},
+            reply_markup: { inline_keyboard: [[
+              { text: "◀️ Змінити валюту", callback_data: "back_currency" }
+            ]]},
           }
         )
       }
@@ -479,10 +422,9 @@ async function onMessage(bot, msg) {
           return bot.sendMessage(msg.chat.id, 
             "⚠️ Максимум 5 фото. Натисніть «Готово»:",
             { 
-              reply_markup: { inline_keyboard: [
-                [{ text: "✅ Готово", callback_data: "photos_done" }],
-                getBackButton(s)
-              ]}
+              reply_markup: { inline_keyboard: [[
+                { text: "✅ Готово", callback_data: "photos_done" }
+              ]]}
             }
           )
         }
@@ -498,10 +440,9 @@ async function onMessage(bot, msg) {
           return bot.sendMessage(msg.chat.id,
             n < 5 ? "Надішліть ще фото або натисніть «Готово»:" : "Максимум 5 фото досягнуто:",
             { 
-              reply_markup: { inline_keyboard: [
-                [{ text: `✅ Готово (${n})`, callback_data: "photos_done" }],
-                getBackButton(s)
-              ]}
+              reply_markup: { inline_keyboard: [[
+                { text: `✅ Готово (${n})`, callback_data: "photos_done" }
+              ]]}
             }
           )
         } catch (e) {
@@ -516,10 +457,9 @@ async function onMessage(bot, msg) {
         return bot.sendMessage(msg.chat.id, 
           "⚠️ Надішліть саме фото (не файл), або пропустіть:",
           { 
-            reply_markup: { inline_keyboard: [
-              [{ text: "⏭ Пропустити", callback_data: "skip_photos" }],
-              getBackButton(s)
-            ]}
+            reply_markup: { inline_keyboard: [[
+              { text: "⏭ Пропустити", callback_data: "skip_photos" }
+            ]]}
           }
         )
       }
@@ -527,7 +467,6 @@ async function onMessage(bot, msg) {
     }
     
     case "phone": {
-      // 5. Валидация украинского номера
       const cleaned = text.trim()
       if (cleaned && !validateUkrainianPhone(cleaned)) {
         return bot.sendMessage(msg.chat.id,
@@ -539,10 +478,9 @@ async function onMessage(bot, msg) {
           "_Спробуйте ще раз або пропустіть цей крок_",
           {
             parse_mode: "MarkdownV2",
-            reply_markup: { inline_keyboard: [
-              [{ text: "⏭ Пропустити", callback_data: "skip_phone" }],
-              getBackButton(s)
-            ]},
+            reply_markup: { inline_keyboard: [[
+              { text: "⏭ Пропустити", callback_data: "skip_phone" }
+            ]]},
           }
         )
       }
@@ -569,28 +507,8 @@ async function onCallback(bot, q) {
 
   await bot.answerCallbackQuery(q.id)
 
-  // ── 3. Навігація назад ────────────────────────────────────────────────────
-  if (data === "go_back") {
-    const s = getSession(uid)
-    if (goBack(s)) {
-      // Перенаправляємо на попередній крок
-      switch (s.step) {
-        case "category":     return askCategory(bot, chatId, s)
-        case "title":        return askTitle(bot, chatId, s)
-        case "description":  return askDescription(bot, chatId, s)
-        case "currency":     return askCurrency(bot, chatId, s)
-        case "amount":       return askAmount(bot, chatId, s)
-        case "photos":       return askPhotos(bot, chatId, s)
-        case "phone":        return askPhone(bot, chatId, s)
-        case "confirm":      return showConfirm(bot, chatId, s, username)
-      }
-    }
-    return bot.sendMessage(chatId, "Це перший крок, назад йти нікуди.")
-  }
-
   // ── Старт нового оголошення ──────────────────────────────────────────────
   if (data === "start_new" || data === "restart") {
-    // Перевірка денного ліміту
     if (!canSubmitToday(uid)) {
       const stats = getDailyStats(uid)
       return bot.sendMessage(chatId,
@@ -604,7 +522,6 @@ async function onCallback(bot, q) {
       )
     }
 
-    // Перевірка кулдауна
     const left = cooldownLeft(uid)
     if (left > 0) {
       return bot.sendMessage(chatId,
@@ -616,7 +533,6 @@ async function onCallback(bot, q) {
       )
     }
 
-    // Перевірка активних оголошень
     const count = await Listing.countDocuments({ 
       telegramId: uid, 
       status: { $in: ["pending", "published"] } 
@@ -686,34 +602,6 @@ async function onCallback(bot, q) {
     return showConfirm(bot, chatId, s, username)
   }
 
-  // ── 3. Меню редагування ───────────────────────────────────────────────────
-  if (data === "edit_menu" && s.step === "confirm") {
-    return showEditMenu(bot, chatId, s)
-  }
-
-  if (data === "back_to_confirm") {
-    return showConfirm(bot, chatId, s, username)
-  }
-
-  if (data.startsWith("edit_")) {
-    const field = data.slice(5)
-    switch (field) {
-      case "category":
-        return askCategory(bot, chatId, s)
-      case "title":
-        return askTitle(bot, chatId, s)
-      case "description":
-        return askDescription(bot, chatId, s)
-      case "price":
-        return askCurrency(bot, chatId, s)
-      case "photos":
-        s.data.photos = [] // Очищаємо фото для нового завантаження
-        return askPhotos(bot, chatId, s)
-      case "phone":
-        return askPhone(bot, chatId, s)
-    }
-  }
-
   // ── Підтвердження ─────────────────────────────────────────────────────────
   if (data === "confirm" && s.step === "confirm") {
     const left = cooldownLeft(uid)
@@ -721,7 +609,6 @@ async function onCallback(bot, q) {
       return bot.sendMessage(chatId, `⏰ Зачекайте ще ${fmtCooldown(left)}.`)
     }
 
-    // 4. Перевірка денного ліміту перед збереженням
     if (!canSubmitToday(uid)) {
       return bot.sendMessage(chatId,
         `⏸ Ви вичерпали денний ліміт оголошень (${MAX_DAILY} шт).\nСпробуйте завтра!`
@@ -741,10 +628,9 @@ async function onCallback(bot, q) {
         telegramId:       uid,
         telegramUsername: username,
         status:           "pending",
-        viewCount:        0,  // 6. Счетчик просмотров
+        viewCount:        0,
       })
 
-      // 4. Записуємо подачу
       recordSubmission(uid)
       cooldowns.set(uid, Date.now())
       resetSession(uid)
@@ -800,7 +686,7 @@ async function onCallback(bot, q) {
     const txt = list.map((l, i) =>
       `${i + 1}\\. ${emoji[l.status]} *${escMd(l.title)}*\n` +
       `   ${escMd(lbl[l.status])} · ${escMd(l.price || "—")}` +
-      (l.viewCount ? `\n   👁 Переглядів: ${l.viewCount}` : "") +  // 6. Показываем просмотры
+      (l.viewCount ? `\n   👁 Переглядів: ${l.viewCount}` : "") +
       (l.rejectReason ? `\n   _Причина: ${escMd(l.rejectReason)}_` : "")
     ).join("\n\n")
     
@@ -838,7 +724,6 @@ async function notifyApproved(listing) {
 }
 
 async function notifyRejected(listing, reason = "") {
-  // 4. При відхиленні додаємо в лічильник
   recordRejection(listing.telegramId)
   
   const remaining = getRemainingAttempts(listing.telegramId)
@@ -903,6 +788,6 @@ module.exports = {
   notifyApproved, 
   notifyRejected, 
   notifyExpired, 
-  recordRejection,  // 4. Экспортируем для использования в других модулях
+  recordRejection,
   TTL_DAYS 
 }
