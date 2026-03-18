@@ -142,7 +142,7 @@ const { createMarketplaceBot,
         notifyRejected,
         TTL_DAYS }                       = require("./bot/Marketplacebot")
 const { loadAllPosts, loadPostById } = require("./blog/index")
-const { startListingsCron }              = require("./bot/listings.cron")
+const { startListingsCron }              = require("./bot/listings.cron.js")
 
 
 const app    = express()
