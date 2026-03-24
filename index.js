@@ -278,136 +278,319 @@ app.patch("/api/blog/:id/approve", auth, async (req, res) => {
 
 // ── MARKETPLACE API ───────────────────────────────────────────────────────
  
-// Список объявлений
-// Публично: только published
-// Админ + ?all=1: все статусы
-app.get("/api/listings", async (req, res) => {
-  try {
-    const isAdmin = req.headers["x-admin-key"] === process.env.ADMIN_KEY
-    const filter  = (isAdmin && req.query.all === "1") ? {} : { status: "published" }
-    res.json(await Listing.find(filter).sort({ createdAt: -1 }).lean())
-  } catch (e) { res.status(500).json({ error: "Listings load error" }) }
-})
+// // Список объявлений
+// // Публично: только published
+// // Админ + ?all=1: все статусы
+// app.get("/api/listings", async (req, res) => {
+//   try {
+//     const isAdmin = req.headers["x-admin-key"] === process.env.ADMIN_KEY
+//     const filter  = (isAdmin && req.query.all === "1") ? {} : { status: "published" }
+//     res.json(await Listing.find(filter).sort({ createdAt: -1 }).lean())
+//   } catch (e) { res.status(500).json({ error: "Listings load error" }) }
+// })
 
-// 6. НОВЫЙ ENDPOINT: Просмотр конкретного объявления с увеличением счетчика
-app.get("/api/listings/:id", async (req, res) => {
+// // 6. НОВЫЙ ENDPOINT: Просмотр конкретного объявления с увеличением счетчика
+// app.get("/api/listings/:id", async (req, res) => {
+//   try {
+//     const listing = await Listing.findOne({ id: req.params.id }).lean()
+    
+//     if (!listing) {
+//       return res.status(404).json({ error: "Listing not found" })
+//     }
+    
+//     // Увеличиваем счетчик просмотров (только для опубликованных)
+//     if (listing.status === "published") {
+//       await Listing.updateOne(
+//         { id: req.params.id },
+//         { 
+//           $inc: { viewCount: 1 },
+//           $set: { lastViewedAt: new Date() }
+//         }
+//       )
+      
+//       // Обновляем объект для ответа
+//       listing.viewCount = (listing.viewCount || 0) + 1
+//       listing.lastViewedAt = new Date()
+//     }
+    
+//     res.json(listing)
+//   } catch (e) { 
+//     res.status(500).json({ error: "Listing load error" }) 
+//   }
+// })
+ 
+// // Одобрить → published + expiresAt + уведомление продавцу
+// app.patch("/api/listings/:id/approve", auth, async (req, res) => {
+//   try {
+//     const now       = new Date()
+//     const expiresAt = new Date(now)
+//     expiresAt.setDate(expiresAt.getDate() + TTL_DAYS)
+ 
+//     const listing = await Listing.findOneAndUpdate(
+//       { id: req.params.id },
+//       { status: "published", publishedAt: now, expiresAt },
+//       { returnDocument: "after", new: true }
+//     )
+//     if (!listing) return res.status(404).json({ error: "Not found" })
+//     notifyApproved(listing).catch(() => {})
+//     res.json(listing)
+//   } catch (e) { res.status(500).json({ error: e.message }) }
+// })
+ 
+// // 4. ОБНОВЛЕНО: Отклонить → rejected + причина + уведомление + recordRejection
+// app.patch("/api/listings/:id/reject", auth, async (req, res) => {
+//   try {
+//     const reason  = req.body.reason || ""
+//     const listing = await Listing.findOneAndUpdate(
+//       { id: req.params.id },
+//       { status: "rejected", rejectReason: reason },
+//       { returnDocument: "after", new: true }
+//     )
+//     if (!listing) return res.status(404).json({ error: "Not found" })
+    
+//     // ВАЖНО: Вызываем recordRejection для учета в дневном лимите
+//     // Эта функция автоматически вызывается внутри notifyRejected
+//     notifyRejected(listing, reason).catch(() => {})
+    
+//     res.json(listing)
+//   } catch (e) { res.status(500).json({ error: e.message }) }
+// })
+ 
+// // Удалить + фото из Cloudinary
+// app.delete("/api/listings/:id", auth, async (req, res) => {
+//   try {
+//     const listing = await Listing.findOne({ id: req.params.id })
+//     if (!listing) return res.status(404).json({ error: "Not found" })
+//     await Promise.allSettled(
+//       (listing.photos || []).map(url => {
+//         const m = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i)
+//         if (!m) return Promise.resolve()
+//         return cloudinary.uploader.destroy(m[1], { resource_type: "image" })
+//       })
+//     )
+//     await Listing.deleteOne({ id: req.params.id })
+//     res.json({ ok: true })
+//   } catch (e) { res.status(500).json({ error: e.message }) }
+// })
+
+// // 6. НОВЫЙ ENDPOINT: Статистика по категориям
+// app.get("/api/listings/stats/categories", async (req, res) => {
+//   try {
+//     const stats = await Listing.aggregate([
+//       { $match: { status: "published" } },
+//       { 
+//         $group: {
+//           _id: "$category",
+//           count: { $sum: 1 },
+//           totalViews: { $sum: "$viewCount" },
+//           avgViews: { $avg: "$viewCount" }
+//         }
+//       },
+//       { $sort: { count: -1 } }
+//     ])
+//     res.json(stats)
+//   } catch (e) {
+//     res.status(500).json({ error: "Stats load error" })
+//   }
+// })
+
+// // 6. НОВЫЙ ENDPOINT: Топ объявлений по просмотрам
+// app.get("/api/listings/stats/top-viewed", async (req, res) => {
+//   try {
+//     const limit = parseInt(req.query.limit) || 10
+//     const topListings = await Listing.find({ status: "published" })
+//       .sort({ viewCount: -1 })
+//       .limit(limit)
+//       .lean()
+//     res.json(topListings)
+//   } catch (e) {
+//     res.status(500).json({ error: "Top listings load error" })
+//   }
+// })
+app.post("/api/listings/:id/view", async (req, res) => {
   try {
-    const listing = await Listing.findOne({ id: req.params.id }).lean()
+    const { id } = req.params
+    const { viewerId } = req.body
+ 
+    if (!viewerId) {
+      return res.status(400).json({ 
+        error: "viewerId is required" 
+      })
+    }
+ 
+    // Находим объявление
+    const listing = await Listing.findOne({ id, status: "published" })
+    
+    if (!listing) {
+      return res.status(404).json({ 
+        error: "Listing not found or not published" 
+      })
+    }
+ 
+    // Проверяем, просматривал ли этот пользователь уже это объявление
+    const alreadyViewed = listing.viewedBy?.some(v => v.userId === viewerId)
+ 
+    if (!alreadyViewed) {
+      // Добавляем просмотр
+      await Listing.updateOne(
+        { id },
+        {
+          $inc: { viewCount: 1 },
+          $push: { 
+            viewedBy: {
+              userId: viewerId,
+              viewedAt: new Date()
+            }
+          },
+          $set: { lastViewedAt: new Date() }
+        }
+      )
+ 
+      console.log(`📊 [view] listing ${id} viewed by ${viewerId.slice(0, 15)}... (total: ${listing.viewCount + 1})`)
+ 
+      return res.json({ 
+        success: true, 
+        viewCount: listing.viewCount + 1,
+        isNewView: true
+      })
+    } else {
+      // Просмотр уже был учтен
+      console.log(`👁️ [view] listing ${id} already viewed by ${viewerId.slice(0, 15)}...`)
+      
+      return res.json({ 
+        success: true, 
+        viewCount: listing.viewCount,
+        isNewView: false
+      })
+    }
+ 
+  } catch (error) {
+    console.error("❌ [view] error:", error.message)
+    res.status(500).json({ 
+      error: "Failed to track view" 
+    })
+  }
+})
+ 
+// ── ENDPOINT: Получение статистики просмотров ──────────────────────────────────
+/**
+ * GET /api/listings/:id/stats
+ * 
+ * Возвращает детальную статистику просмотров для объявления
+ */
+app.get("/api/listings/:id/stats", async (req, res) => {
+  try {
+    const { id } = req.params
+ 
+    const listing = await Listing.findOne({ id })
     
     if (!listing) {
       return res.status(404).json({ error: "Listing not found" })
     }
-    
-    // Увеличиваем счетчик просмотров (только для опубликованных)
-    if (listing.status === "published") {
-      await Listing.updateOne(
-        { id: req.params.id },
-        { 
-          $inc: { viewCount: 1 },
-          $set: { lastViewedAt: new Date() }
-        }
-      )
-      
-      // Обновляем объект для ответа
-      listing.viewCount = (listing.viewCount || 0) + 1
-      listing.lastViewedAt = new Date()
-    }
-    
-    res.json(listing)
-  } catch (e) { 
-    res.status(500).json({ error: "Listing load error" }) 
+ 
+    // Группируем просмотры по дням
+    const viewsByDay = {}
+    listing.viewedBy?.forEach(view => {
+      const date = new Date(view.viewedAt).toISOString().split('T')[0]
+      viewsByDay[date] = (viewsByDay[date] || 0) + 1
+    })
+ 
+    res.json({
+      id: listing.id,
+      title: listing.title,
+      totalViews: listing.viewCount || 0,
+      uniqueViewers: listing.viewedBy?.length || 0,
+      lastViewedAt: listing.lastViewedAt,
+      viewsByDay,
+      createdAt: listing.createdAt,
+      publishedAt: listing.publishedAt,
+    })
+ 
+  } catch (error) {
+    console.error("❌ [stats] error:", error.message)
+    res.status(500).json({ error: "Failed to get stats" })
   }
 })
  
-// Одобрить → published + expiresAt + уведомление продавцу
-app.patch("/api/listings/:id/approve", auth, async (req, res) => {
-  try {
-    const now       = new Date()
-    const expiresAt = new Date(now)
-    expiresAt.setDate(expiresAt.getDate() + TTL_DAYS)
- 
-    const listing = await Listing.findOneAndUpdate(
-      { id: req.params.id },
-      { status: "published", publishedAt: now, expiresAt },
-      { returnDocument: "after", new: true }
-    )
-    if (!listing) return res.status(404).json({ error: "Not found" })
-    notifyApproved(listing).catch(() => {})
-    res.json(listing)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
- 
-// 4. ОБНОВЛЕНО: Отклонить → rejected + причина + уведомление + recordRejection
-app.patch("/api/listings/:id/reject", auth, async (req, res) => {
-  try {
-    const reason  = req.body.reason || ""
-    const listing = await Listing.findOneAndUpdate(
-      { id: req.params.id },
-      { status: "rejected", rejectReason: reason },
-      { returnDocument: "after", new: true }
-    )
-    if (!listing) return res.status(404).json({ error: "Not found" })
-    
-    // ВАЖНО: Вызываем recordRejection для учета в дневном лимите
-    // Эта функция автоматически вызывается внутри notifyRejected
-    notifyRejected(listing, reason).catch(() => {})
-    
-    res.json(listing)
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
- 
-// Удалить + фото из Cloudinary
-app.delete("/api/listings/:id", auth, async (req, res) => {
-  try {
-    const listing = await Listing.findOne({ id: req.params.id })
-    if (!listing) return res.status(404).json({ error: "Not found" })
-    await Promise.allSettled(
-      (listing.photos || []).map(url => {
-        const m = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i)
-        if (!m) return Promise.resolve()
-        return cloudinary.uploader.destroy(m[1], { resource_type: "image" })
-      })
-    )
-    await Listing.deleteOne({ id: req.params.id })
-    res.json({ ok: true })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
-
-// 6. НОВЫЙ ENDPOINT: Статистика по категориям
-app.get("/api/listings/stats/categories", async (req, res) => {
-  try {
-    const stats = await Listing.aggregate([
-      { $match: { status: "published" } },
-      { 
-        $group: {
-          _id: "$category",
-          count: { $sum: 1 },
-          totalViews: { $sum: "$viewCount" },
-          avgViews: { $avg: "$viewCount" }
-        }
-      },
-      { $sort: { count: -1 } }
-    ])
-    res.json(stats)
-  } catch (e) {
-    res.status(500).json({ error: "Stats load error" })
-  }
-})
-
-// 6. НОВЫЙ ENDPOINT: Топ объявлений по просмотрам
-app.get("/api/listings/stats/top-viewed", async (req, res) => {
+// ── ENDPOINT: Топ просматриваемых объявлений ───────────────────────────────────
+/**
+ * GET /api/listings/top/views
+ * 
+ * Возвращает топ объявлений по просмотрам
+ */
+app.get("/api/listings/top/views", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10
+ 
     const topListings = await Listing.find({ status: "published" })
       .sort({ viewCount: -1 })
       .limit(limit)
+      .select("id title price category photos viewCount createdAt")
       .lean()
+ 
     res.json(topListings)
-  } catch (e) {
-    res.status(500).json({ error: "Top listings load error" })
+ 
+  } catch (error) {
+    console.error("❌ [top-views] error:", error.message)
+    res.status(500).json({ error: "Failed to get top listings" })
   }
 })
-
+ 
+// ══════════════════════════════════════════════════════════════════════════════
+// ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ
+// ══════════════════════════════════════════════════════════════════════════════
+ 
+/**
+ * Очистка старых записей просмотров (опционально)
+ * Можно вызывать периодически через cron
+ */
+async function cleanOldViews() {
+  try {
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+ 
+    const result = await Listing.updateMany(
+      {},
+      {
+        $pull: {
+          viewedBy: {
+            viewedAt: { $lt: sixMonthsAgo }
+          }
+        }
+      }
+    )
+ 
+    console.log(`🧹 Cleaned old views from ${result.modifiedCount} listings`)
+  } catch (error) {
+    console.error("❌ Failed to clean old views:", error.message)
+  }
+}
+ 
+// ══════════════════════════════════════════════════════════════════════════════
+// ПРИМЕР ИНТЕГРАЦИИ В СУЩЕСТВУЮЩИЙ ENDPOINT
+// ══════════════════════════════════════════════════════════════════════════════
+ 
+/**
+ * Обновите существующий GET /api/listings endpoint
+ * чтобы включить информацию о просмотрах
+ */
+app.get("/api/listings", async (req, res) => {
+  try {
+    const listings = await Listing.find({ status: "published" })
+      .sort({ createdAt: -1 })
+      .select("-viewedBy") // Не отправляем детальную информацию о просмотрах клиенту
+      .lean()
+ 
+    res.json(listings)
+  } catch (error) {
+    console.error("Failed to fetch listings:", error.message)
+    res.status(500).json({ error: "Failed to fetch listings" })
+  }
+})
+ 
+module.exports = {
+  cleanOldViews
+}
 // ── Start ─────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 5001
