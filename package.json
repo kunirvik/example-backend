@@ -25,10 +25,13 @@
     "express": "^5.2.1",
     "fs": "^0.0.1-security",
     "gray-matter": "^4.0.3",
+    "ioredis": "^5.10.1",
     "markdown-it": "^14.1.1",
     "mongoose": "^9.2.3",
     "multer": "^2.1.1",
+    "node-cache": "^5.1.2",
     "node-telegram-bot-api": "^0.67.0",
-    "path": "^0.12.7"
+    "path": "^0.12.7",
+    "redis": "^5.11.0"
   }
 }

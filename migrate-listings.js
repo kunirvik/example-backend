@@ -1,13 +1,4 @@
-#!/usr/bin/env node
-/**
- * Скрипт міграції бази даних для оновлення бота барахолки
- * 
- * Використання:
- * node migrate-listings.js
- * 
- * Або з явним указанням MongoDB URI:
- * MONGODB_URI="mongodb://..." node migrate-listings.js
- */
+
 
 require('dotenv').config()
 const mongoose = require('mongoose')

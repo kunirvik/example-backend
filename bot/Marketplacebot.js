@@ -1,7 +1,8 @@
 const TelegramBot = require("node-telegram-bot-api")
 const cloudinary  = require("../cloudinary.config")
 const Listing     = require("./Listing")
-
+const redis = require("../redis")
+const bans = require('./user-bans')
 const MAX_ACTIVE  = 3
 const MAX_DAILY   = 3  // Максимум 3 объявления в день
 const TTL_DAYS    = 14
@@ -40,7 +41,7 @@ const CATEGORIES = [
     example: "Наприклад: Велосипедний шолом Giro Fixture, розмір M (54-61см). Стан ідеальний, використовувався 1 сезон. Регулювання розміру, знімний козирок."
   },
 ]
-
+ 
 const CURRENCIES = [
   { id: "uah",   label: "₴ Гривня",      symbol: "₴",  after: true  },
   { id: "usd",   label: "$ Долар",        symbol: "$",  after: false },
@@ -48,6 +49,42 @@ const CURRENCIES = [
   { id: "trade", label: "🔄 Обмін",       noAmount: true },
   { id: "free",  label: "🤝 Договірна",   noAmount: true },
 ]
+
+// bot/Marketplacebot.js - добавить функцию
+
+const crypto = require('crypto')
+
+// Генерировать уникальный хеш для объявления
+function generateListingHash(data) {
+  const normalized = `
+    ${data.title}
+    ${data.category}
+    ${data.description || ''}
+    ${data.price || ''}
+  `.trim()
+  
+  return crypto
+    .createHash('sha256')
+    .update(normalized)
+    .digest('hex')
+    .slice(0, 16)  // Первые 16 символов
+}
+
+// Проверить дубли за последние 24 часа
+async function isDuplicate(uid, listingHash) {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  
+  const duplicate = await Listing.findOne({
+    telegramId: uid,
+    listingHash: listingHash,
+    createdAt: { $gt: oneDayAgo }
+  })
+  
+  return !!duplicate
+} 
+
+
+
 
 const BANNED_PATTERNS = [/руб/i, /рублей/i, /rub\b/i, /kzt/i, /тенге/i, /бел/i]
 
@@ -90,18 +127,52 @@ function resetSession(id) {
 function makeId(uid) { return `listing-${uid}-${Date.now()}` }
 
 // ── СИСТЕМА ДНЕВНЫХ ЛИМИТОВ ───────────────────────────────────────────────────
-const dailyAttempts = new Map()
+// const dailyAttempts = new Map()
 
-function getDailyStats(uid) {
-  const today = new Date().toISOString().split("T")[0]
-  const stats = dailyAttempts.get(uid)
+// function getDailyStats(uid) {
+//   const today = new Date().toISOString().split("T")[0]
+//   const stats = dailyAttempts.get(uid)
   
-  if (!stats || stats.date !== today) {
-    const newStats = { date: today, submitted: 0, rejected: 0 }
-    dailyAttempts.set(uid, newStats)
-    return newStats
+//   if (!stats || stats.date !== today) {
+//     const newStats = { date: today, submitted: 0, rejected: 0 }
+//     dailyAttempts.set(uid, newStats)
+//     return newStats
+//   }
+//   return stats
+// }
+
+// ✅ Redis управляет лимитами с TTL
+
+
+async function getDailyStats(uid) {
+  let stats = await redis.getDailyLimit(uid)
+  
+  if (!stats) {
+    stats = { submitted: 0, rejected: 0 }
+    await redis.setDailyLimit(uid, stats)
   }
+  
   return stats
+}
+
+async function canSubmitToday(uid) {
+  const stats = await getDailyStats(uid)
+  const totalAttempts = stats.submitted + stats.rejected
+  return totalAttempts < MAX_DAILY
+}
+
+async function recordSubmission(uid) {
+  await redis.incrementDailyAttempt(uid, 'submitted')
+}
+
+async function recordRejection(uid) {
+  await redis.incrementDailyAttempt(uid, 'rejected')
+}
+
+async function getRemainingAttempts(uid) {
+  const stats = await getDailyStats(uid)
+  const totalAttempts = stats.submitted + stats.rejected
+  return Math.max(0, MAX_DAILY - totalAttempts)
 }
 
 function canSubmitToday(uid) {
@@ -167,6 +238,9 @@ async function uploadPhoto(bot, photoArray) {
   console.log(`☁️  uploaded ${pubId} (${Math.round(result.bytes / 1024)}KB)`)
   return result.secure_url
 }
+
+
+
 
 // ── Форматування ──────────────────────────────────────────────────────────────
 function escMd(s = "") {
@@ -356,7 +430,20 @@ async function onMessage(bot, msg) {
   const username = msg.from.username || ""
   const text     = msg.text || ""
   const s        = getSession(uid)
+ 
+  const chatId = msg.chat.id
 
+    // ✅ ПРОВЕРИТЬ БАН
+  const isBanned = await bans.isUserBanned(uid, 'marketplace')
+  
+  if (isBanned) {
+    const banInfo = await bans.getBanInfo(uid)
+    return bot.sendMessage(chatId, 
+      `🚫 ${banInfo.ban.message}`
+    )
+  } 
+
+  
   if (text === "/start") {
     resetSession(uid)
     return showWelcome(bot, msg.chat.id, uid)
@@ -603,54 +690,130 @@ async function onCallback(bot, q) {
   }
 
   // ── Підтвердження ─────────────────────────────────────────────────────────
-  if (data === "confirm" && s.step === "confirm") {
-    const left = cooldownLeft(uid)
-    if (left > 0) {
-      return bot.sendMessage(chatId, `⏰ Зачекайте ще ${fmtCooldown(left)}.`)
-    }
+  // if (data === "confirm" && s.step === "confirm") {
 
-    if (!canSubmitToday(uid)) {
-      return bot.sendMessage(chatId,
-        `⏸ Ви вичерпали денний ліміт оголошень (${MAX_DAILY} шт).\nСпробуйте завтра!`
-      )
-    }
+  //   const left = cooldownLeft(uid)
+  //   if (left > 0) {
+  //     return bot.sendMessage(chatId, `⏰ Зачекайте ще ${fmtCooldown(left)}.`)
+  //   }
 
-    try {
-      await Listing.create({
-        id:               makeId(uid),
-        title:            s.data.title,
-        description:      s.data.description,
-        price:            formatPrice(s.data.currency, s.data.amount),
-        category:         s.data.category,
-        photos:           s.data.photos,
-        contactPhone:     s.data.phone,
-        contactUsername:  username,
-        telegramId:       uid,
-        telegramUsername: username,
-        status:           "pending",
-        viewCount:        0,
-      })
+  //   // 2. Проверить дневной лимит (ИЗ REDIS!)
+  // const canSubmit = await canSubmitToday(uid)
+  // if (!canSubmit) {
+  //   return bot.sendMessage(chatId,
+  //     `⏸ Ви вичерпали денний ліміт оголошень (${MAX_DAILY} шт).\nСпробуйте завтра!`
+  //   )
+  // }
 
-      recordSubmission(uid)
-      cooldowns.set(uid, Date.now())
-      resetSession(uid)
+  //   // if (!canSubmitToday(uid)) {
+  //   //   return bot.sendMessage(chatId,
+  //   //     `⏸ Ви вичерпали денний ліміт оголошень (${MAX_DAILY} шт).\nСпробуйте завтра!`
+  //   //   )
+  //   // }
 
-      const remaining = getRemainingAttempts(uid)
+  //   try {
+  //     await Listing.create({
+  //       id:               makeId(uid),
+  //       title:            s.data.title,
+  //       description:      s.data.description,
+  //       price:            formatPrice(s.data.currency, s.data.amount),
+  //       category:         s.data.category,
+  //       photos:           s.data.photos,
+  //       contactPhone:     s.data.phone,
+  //       contactUsername:  username,
+  //       telegramId:       uid,
+  //       telegramUsername: username,
+  //       status:           "pending",
+  //       viewCount:        0,
+  //     })
+
+  //     recordSubmission(uid)
+  //     cooldowns.set(uid, Date.now())
+  //     resetSession(uid)
+
+  //     const remaining = getRemainingAttempts(uid)
       
+  //     return bot.sendMessage(chatId,
+  //       `✅ *Оголошення надіслано на модерацію\\!*\n\n` +
+  //       `⏱ Розглянемо протягом 24 годин\\.\n` +
+  //       `⏰ Наступне оголошення — через 15 хвилин\\.\n\n` +
+  //       `📊 Залишилось спроб сьогодні: *${remaining}* з ${MAX_DAILY}`,
+  //       { parse_mode: "MarkdownV2" }
+  //     )
+  //   } catch (e) {
+  //     console.error("listing save error:", e.message)
+  //     return bot.sendMessage(chatId, 
+  //       "❌ Помилка при збереженні. Спробуйте /start"
+  //     )
+  //   }
+  // }
+
+  if (data === "confirm" && s.step === "confirm") {
+  const uid = q.from.id
+  const chatId = q.message.chat.id
+  const username = q.from.username || "unknown"
+  
+  try {
+    // 1. Проверка дневного лимита (REDIS)
+    const canSubmit = await canSubmitToday(uid)
+    if (!canSubmit) {
       return bot.sendMessage(chatId,
-        `✅ *Оголошення надіслано на модерацію\\!*\n\n` +
-        `⏱ Розглянемо протягом 24 годин\\.\n` +
-        `⏰ Наступне оголошення — через 15 хвилин\\.\n\n` +
-        `📊 Залишилось спроб сьогодні: *${remaining}* з ${MAX_DAILY}`,
-        { parse_mode: "MarkdownV2" }
-      )
-    } catch (e) {
-      console.error("listing save error:", e.message)
-      return bot.sendMessage(chatId, 
-        "❌ Помилка при збереженні. Спробуйте /start"
+        `⏸ Ви вичерпали денний ліміт оголошень (${MAX_DAILY} шт).`
       )
     }
+
+    // 2. НОВОЕ: Проверка дубликатов ✅
+    const listingHash = generateListingHash(s.data)
+    const isDup = await isDuplicate(uid, listingHash)
+    
+    if (isDup) {
+      return bot.sendMessage(chatId,
+        `⚠️ *Виявлено дублікат!*\n\n` +
+        `Ви вже публікували це оголошення протягом останніх 24 годин.\n` +
+        `Спробуйте пізніше або змініть описання.`,
+        { parse_mode: "Markdown" }
+      )
+    }
+
+    // 3. Создать объявление С ХЕШЕМ
+    await Listing.create({
+      id: makeId(uid),
+      title: s.data.title,
+      description: s.data.description,
+      price: formatPrice(s.data.currency, s.data.amount),
+      category: s.data.category,
+      photos: s.data.photos,
+      contactPhone: s.data.phone,
+      contactUsername: username,
+      telegramId: uid,
+      telegramUsername: username,
+      status: "pending",
+      viewCount: 0,
+      listingHash: listingHash  // ✅ СОХРАНИТЬ ХЕШ
+    })
+
+    // 4. Записать попытку
+    await recordSubmission(uid)
+    cooldowns.set(uid, Date.now())
+    resetSession(uid)
+
+    const remaining = await getRemainingAttempts(uid)
+    
+    return bot.sendMessage(chatId,
+      `✅ *Оголошення надіслано на модерацію!*\n\n` +
+      `📊 Залишилось спроб сьогодні: *${remaining}* з ${MAX_DAILY}`,
+      { parse_mode: "MarkdownV2" }
+    )
+    
+  } catch (e) {
+    console.error("listing save error:", e.message)
+    return bot.sendMessage(chatId, 
+      "❌ Помилка при збереженні. Спробуйте /start"
+    )
   }
+}
+
+
 
   if (data === "cancel") {
     resetSession(uid)
@@ -702,6 +865,8 @@ async function onCallback(bot, q) {
     )
   }
 }
+
+
 
 // ── Сповіщення ────────────────────────────────────────────────────────────────
 let _bot = null

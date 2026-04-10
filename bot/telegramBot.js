@@ -841,6 +841,55 @@ function createBot(app) {
     res.sendStatus(200)
   })
 
+  bot.onText(/\/ban (.+)/, async (msg, match) => {
+  const adminId = process.env.ADMIN_TELEGRAM_ID
+  if (String(msg.from.id) !== String(adminId)) return
+
+  const args = match[1].split(' ')
+  const userId = args[0]
+  const reason = args.slice(1).join(' ') || 'No reason'
+
+  const result = await bans.banUser(userId, { reason, bannedBy: msg.from.id })
+
+  bot.sendMessage(msg.chat.id, 
+    result.ok 
+      ? `✅ Banned ${userId}: ${reason}`
+      : `❌ Error: ${result.error}`
+  )
+})
+
+bot.onText(/\/unban (.+)/, async (msg, match) => {
+  const adminId = process.env.ADMIN_TELEGRAM_ID
+  if (String(msg.from.id) !== String(adminId)) return
+
+  const userId = match[1]
+  const result = await bans.revokeBan(userId, msg.from.id)
+
+  bot.sendMessage(msg.chat.id,
+    result.ok 
+      ? `✅ Unbanned ${userId}`
+      : `❌ Error: ${result.error}`
+  )
+})
+
+bot.onText(/\/bans/, async (msg) => {
+  const adminId = process.env.ADMIN_TELEGRAM_ID
+  if (String(msg.from.id) !== String(adminId)) return
+
+  const banList = await bans.getAllActiveBans()
+  
+  if (!banList.length) {
+    return bot.sendMessage(msg.chat.id, 'No active bans')
+  }
+
+  const text = banList.map(b => 
+    `• <code>${b.userId}</code> @${b.username}\n  ${b.reason}\n  ${b.isPermanent ? '♾️ Permanent' : `⏰ ${Math.ceil((new Date(b.expiresAt) - new Date()) / (1000*60*60*24))} days left`}`
+  ).join('\n\n')
+
+  bot.sendMessage(msg.chat.id, text, { parse_mode: 'HTML' })
+}) 
+
+
   // Новые посты канала
   bot.on("channel_post", async (msg) => {
     if (channelId && String(msg.chat.id) !== String(channelId)) return
