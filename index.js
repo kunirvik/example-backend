@@ -341,7 +341,7 @@ const Post       = require("./bot/Post")
 const Listing    = require("./bot/Listing")
 const bans = require('./bot/user-bans.js')
 // ── REDIS ИМПОРТ ────────────────────────────────────────────────────────────────
-const redis = require("./bot/redis")
+const redis = require("./redis.js")
 
 const { createBot }                  = require("./bot/telegramBot")
 const { createMarketplaceBot,
